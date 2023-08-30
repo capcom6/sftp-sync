@@ -23,7 +23,7 @@ func (c *Config) validate() error {
 	return nil
 }
 
-func Parse(args ...string) (Config, error) {
+func Parse(args []string) (Config, error) {
 	cfg := Config{}
 
 	dest := ""
