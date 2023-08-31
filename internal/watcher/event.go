@@ -12,5 +12,4 @@ type EventsChannel <-chan Event
 type Event struct {
 	FileName string
 	Type     EventType
-	IsDir    bool
 }

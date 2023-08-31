@@ -78,7 +78,9 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 				}
 
 				log.Println("event:", event)
-				w.processEvent(event)
+				if err := w.processEvent(ctx, event); err != nil {
+					log.Println("error:", err)
+				}
 
 			case err, ok := <-w.fswatcher.Errors:
 				if !ok {
@@ -94,25 +96,47 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 	return w.events, nil
 }
 
-func (w *Watcher) processEvent(event fsnotify.Event) error {
+func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error {
 	defer func() {
 		fmt.Printf("%+v\n", w.fswatcher.WatchList())
 	}()
 
-	if event.Op == fsnotify.Chmod {
+	if source.Op == fsnotify.Chmod {
 		return nil
 	}
-	if event.Op.Has(fsnotify.Remove) {
-		w.fswatcher.Remove(event.Name)
+
+	if !source.Has(fsnotify.Rename) && !source.Has(fsnotify.Remove) {
+		fullpath := source.Name
+		isDir, err := w.isDir(fullpath)
+		if isDir {
+			if source.Op.Has(fsnotify.Create) {
+				w.addRecursive(fullpath)
+			}
+		} else if err != nil {
+			return fmt.Errorf("isDir: %w", err)
+		}
 	}
 
-	fullpath := event.Name
-	if ok, err := w.isDir(fullpath); ok {
-		if event.Op.Has(fsnotify.Create) {
-			w.addRecursive(fullpath)
-		}
-	} else if err != nil {
-		return fmt.Errorf("isDir: %w", err)
+	var eventType EventType
+	if source.Has(fsnotify.Remove) || source.Has(fsnotify.Rename) {
+		eventType = EventRemoved
+	} else if source.Has(fsnotify.Create) {
+		eventType = EventCreated
+	} else if source.Has(fsnotify.Write) {
+		eventType = EventModified
+	} else {
+		return nil
+	}
+
+	event := Event{
+		FileName: source.Name,
+		Type:     eventType,
+	}
+
+	select {
+	case w.events <- event:
+	case <-ctx.Done():
+		return nil
 	}
 
 	return nil
