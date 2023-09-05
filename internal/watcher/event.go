@@ -10,6 +10,7 @@ type EventType string
 type EventsChannel <-chan Event
 
 type Event struct {
-	FileName string
-	Type     EventType
+	AbsPath string
+	RelPath string
+	Type    EventType
 }

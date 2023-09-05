@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/capcom6/sftp-sync/internal/config"
+	"github.com/capcom6/sftp-sync/internal/syncer"
 	"github.com/capcom6/sftp-sync/internal/watcher"
 )
 
@@ -22,6 +23,7 @@ func main() {
 	defer cancel()
 
 	watch := watcher.New(cfg.WatchPath, cfg.ExcludePaths)
+	syncer := syncer.New(cfg.Dest)
 
 	ch, err := watch.Watch(ctx, wg)
 	if err != nil {
@@ -38,6 +40,10 @@ func main() {
 					return
 				}
 				log.Println("event:", event)
+				err := syncer.Sync(ctx, event.AbsPath, event.RelPath)
+				if err != nil {
+					log.Println(err)
+				}
 			case <-ctx.Done():
 				return
 			}

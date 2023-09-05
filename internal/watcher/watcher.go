@@ -128,9 +128,15 @@ func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error
 		return nil
 	}
 
+	relPath, err := filepath.Rel(w.RootPath, source.Name)
+	if err != nil {
+		return fmt.Errorf("filepath.Rel: %w", err)
+	}
+
 	event := Event{
-		FileName: source.Name,
-		Type:     eventType,
+		AbsPath: source.Name,
+		RelPath: relPath,
+		Type:    eventType,
 	}
 
 	select {
