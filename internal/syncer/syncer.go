@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path"
@@ -84,6 +85,12 @@ func (s *Syncer) Sync(ctx context.Context, absPath, relPath string) error {
 				return fmt.Errorf("c.MakeDir: %+w", err)
 			}
 		} else {
+			for _, dir := range dirs(relPath) {
+				if err := c.MakeDir(dir); err != nil {
+					log.Printf("error: %s", err)
+				}
+			}
+
 			h, err := os.Open(absPath)
 			if err != nil {
 				return fmt.Errorf("os.Open: %w", err)
@@ -97,6 +104,24 @@ func (s *Syncer) Sync(ctx context.Context, absPath, relPath string) error {
 	}
 
 	return nil
+}
+
+func dirs(dir string) []string {
+	entries := make([]string, 0, 4)
+
+	for {
+		dir = path.Dir(dir)
+		if dir == "." {
+			break
+		}
+		entries = append(entries, dir)
+	}
+
+	for i := 0; i < len(entries)/2; i++ {
+		entries[i], entries[len(entries)-i-1] = entries[len(entries)-i-1], entries[i]
+	}
+
+	return entries
 }
 
 func fsInfo(path string) (bool, bool, error) {

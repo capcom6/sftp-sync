@@ -108,12 +108,13 @@ func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error
 	if !source.Has(fsnotify.Rename) && !source.Has(fsnotify.Remove) {
 		fullpath := source.Name
 		isDir, err := w.isDir(fullpath)
+		if err != nil {
+			return fmt.Errorf("isDir: %w", err)
+		}
 		if isDir {
 			if source.Op.Has(fsnotify.Create) {
 				w.addRecursive(fullpath)
 			}
-		} else if err != nil {
-			return fmt.Errorf("isDir: %w", err)
 		}
 	}
 
