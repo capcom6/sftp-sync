@@ -80,17 +80,17 @@ func (s *Syncer) Sync(ctx context.Context, absPath, relPath string) error {
 			}
 		}
 	} else {
+		for _, dir := range dirs(relPath) {
+			if err := c.MakeDir(dir); err != nil {
+				log.Printf("error: %s", err)
+			}
+		}
+
 		if isDir {
 			if err := c.MakeDir(relPath); err != nil {
 				return fmt.Errorf("c.MakeDir: %+w", err)
 			}
 		} else {
-			for _, dir := range dirs(relPath) {
-				if err := c.MakeDir(dir); err != nil {
-					log.Printf("error: %s", err)
-				}
-			}
-
 			h, err := os.Open(absPath)
 			if err != nil {
 				return fmt.Errorf("os.Open: %w", err)
