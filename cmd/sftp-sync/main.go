@@ -23,7 +23,7 @@ func main() {
 	defer cancel()
 
 	watch := watcher.New(cfg.WatchPath, cfg.ExcludePaths)
-	syncer := syncer.New(cfg.Dest)
+	syncer := syncer.New(cfg.WatchPath, cfg.Dest)
 
 	ch, err := watch.Watch(ctx, wg)
 	if err != nil {
@@ -40,7 +40,7 @@ func main() {
 					return
 				}
 				log.Println("event:", event)
-				err := syncer.Sync(ctx, event.AbsPath, event.RelPath)
+				err := syncer.Sync(ctx, event.AbsPath)
 				if err != nil {
 					log.Println(err)
 				}

@@ -8,22 +8,25 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/jlaffaye/ftp"
 )
 
 type Syncer struct {
+	RootPath  string
 	RemoteURL string
 }
 
-func New(remoteUrl string) *Syncer {
+func New(rootPath, remoteUrl string) *Syncer {
 	return &Syncer{
+		RootPath:  rootPath,
 		RemoteURL: remoteUrl,
 	}
 }
 
-func (s *Syncer) Sync(ctx context.Context, absPath, relPath string) error {
+func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 	u, err := url.Parse(s.RemoteURL)
 	if err != nil {
 		return fmt.Errorf("url.Parse: %w", err)
@@ -59,6 +62,16 @@ func (s *Syncer) Sync(ctx context.Context, absPath, relPath string) error {
 		return fmt.Errorf("fsInfo: %w", err)
 	}
 
+	absRoot, err := filepath.Abs(s.RootPath)
+	if err != nil {
+		return fmt.Errorf("filepath.Abs: %w", err)
+	}
+
+	relPath, err := filepath.Rel(absRoot, absPath)
+	if err != nil {
+		return fmt.Errorf("filepath.Rel: %w", err)
+	}
+
 	if !exists {
 		dir, name := path.Split(relPath)
 		entries, err := c.List(dir)
@@ -87,18 +100,47 @@ func (s *Syncer) Sync(ctx context.Context, absPath, relPath string) error {
 		}
 
 		if isDir {
-			if err := c.MakeDir(relPath); err != nil {
-				return fmt.Errorf("c.MakeDir: %+w", err)
+			s.syncDir(c, absPath, relPath)
+		} else {
+			s.syncFile(c, absPath, relPath)
+		}
+	}
+
+	return nil
+}
+
+func (s *Syncer) syncFile(c *ftp.ServerConn, absPath, relPath string) error {
+	h, err := os.Open(absPath)
+	if err != nil {
+		return fmt.Errorf("os.Open: %w", err)
+	}
+	defer h.Close()
+
+	if err := c.Stor(relPath, h); err != nil {
+		return fmt.Errorf("c.Stor: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Syncer) syncDir(c *ftp.ServerConn, absPath, relPath string) error {
+	if err := c.MakeDir(relPath); err != nil {
+		return fmt.Errorf("c.MakeDir: %w", err)
+	}
+
+	files, err := os.ReadDir(absPath)
+	if err != nil {
+		return fmt.Errorf("os.ReadDir: %w", err)
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			if err := s.syncDir(c, path.Join(absPath, file.Name()), path.Join(relPath, file.Name())); err != nil {
+				return err
 			}
 		} else {
-			h, err := os.Open(absPath)
-			if err != nil {
-				return fmt.Errorf("os.Open: %w", err)
-			}
-			defer h.Close()
-
-			if err := c.Stor(relPath, h); err != nil {
-				return fmt.Errorf("c.Stor: %w", err)
+			if err := s.syncFile(c, path.Join(absPath, file.Name()), path.Join(relPath, file.Name())); err != nil {
+				return err
 			}
 		}
 	}
