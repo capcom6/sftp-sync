@@ -39,7 +39,7 @@ func main() {
 				if !ok {
 					return
 				}
-				log.Println("event:", event)
+				// log.Println("event:", event)
 				err := syncer.Sync(ctx, event.AbsPath)
 				if err != nil {
 					log.Println(err)

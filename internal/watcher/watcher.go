@@ -77,7 +77,7 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 					continue
 				}
 
-				log.Println("event:", event)
+				// log.Println("event:", event)
 				if err := w.processEvent(ctx, event); err != nil {
 					log.Println("error:", err)
 				}
@@ -97,11 +97,14 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 }
 
 func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error {
-	defer func() {
-		fmt.Printf("%+v\n", w.fswatcher.WatchList())
-	}()
+	// defer func() {
+	// 	fmt.Printf("%+v\n", w.fswatcher.WatchList())
+	// }()
 
 	if source.Op == fsnotify.Chmod {
+		return nil
+	}
+	if source.Name == "" || source.Name == "." {
 		return nil
 	}
 

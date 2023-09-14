@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path"
@@ -76,7 +77,11 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 		dir, name := path.Split(relPath)
 		entries, err := c.List(dir)
 		if err != nil {
-			return fmt.Errorf("c.List: %w", err)
+			err, ok := err.(*textproto.Error)
+			if !ok || err.Code != 550 {
+				return fmt.Errorf("c.List: %w", err)
+			}
+			return nil
 		}
 
 		for _, v := range entries {
@@ -85,17 +90,22 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 					if err := c.RemoveDirRecur(relPath); err != nil {
 						return fmt.Errorf("c.RemoveDirRecur: %w", err)
 					}
+					log.Printf("Removed directory: %s\n", relPath)
 				} else if v.Type == ftp.EntryTypeFile {
 					if err := c.Delete(relPath); err != nil {
 						return fmt.Errorf("c.Remove: %w", err)
 					}
+					log.Printf("Removed file: %s\n", relPath)
 				}
 			}
 		}
 	} else {
 		for _, dir := range dirs(relPath) {
 			if err := c.MakeDir(dir); err != nil {
-				log.Printf("error: %s", err)
+				err, ok := err.(*textproto.Error)
+				if !ok || err.Code != 550 {
+					return fmt.Errorf("c.MakeDir: %w", err)
+				}
 			}
 		}
 
@@ -120,6 +130,8 @@ func (s *Syncer) syncFile(c *ftp.ServerConn, absPath, relPath string) error {
 		return fmt.Errorf("c.Stor: %w", err)
 	}
 
+	log.Printf("Uploaded file: %s\n", relPath)
+
 	return nil
 }
 
@@ -127,6 +139,7 @@ func (s *Syncer) syncDir(c *ftp.ServerConn, absPath, relPath string) error {
 	if err := c.MakeDir(relPath); err != nil {
 		return fmt.Errorf("c.MakeDir: %w", err)
 	}
+	log.Printf("Created directory: %s\n", relPath)
 
 	files, err := os.ReadDir(absPath)
 	if err != nil {
