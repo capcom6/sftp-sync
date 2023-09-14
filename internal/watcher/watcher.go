@@ -116,6 +116,13 @@ func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error
 				w.addRecursive(fullpath)
 			}
 		}
+	} else if source.Has(fsnotify.Remove) || source.Has(fsnotify.Rename) {
+		wl := w.fswatcher.WatchList()
+		for _, entry := range wl {
+			if strings.HasPrefix(entry, source.Name) {
+				w.fswatcher.Remove(entry)
+			}
+		}
 	}
 
 	var eventType EventType
