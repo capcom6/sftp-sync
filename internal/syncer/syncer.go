@@ -15,6 +15,14 @@ import (
 	"github.com/jlaffaye/ftp"
 )
 
+type RemoteClient interface {
+	MakeDir(ctx context.Context, remotePath string) error
+	RemoveDir(ctx context.Context, remotePath string) error
+
+	UploadFile(ctx context.Context, remotePath string, localPath string) error
+	RemoveFile(ctx context.Context, remotePath string) error
+}
+
 type Syncer struct {
 	RootPath  string
 	RemoteURL string
