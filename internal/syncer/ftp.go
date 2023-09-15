@@ -3,9 +3,11 @@ package syncer
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/textproto"
 	"net/url"
 	"os"
+	"path"
 	"sync"
 
 	"github.com/jlaffaye/ftp"
@@ -75,7 +77,16 @@ func (c *FtpClient) MakeDir(ctx context.Context, remotePath string) error {
 		return err
 	}
 
-	return c.client.MakeDir(remotePath)
+	dirs := splitPath(remotePath)
+	dirs = append(dirs, remotePath)
+
+	for _, dir := range dirs {
+		if err := c.client.MakeDir(dir); err != nil && !isIgnorableError(err) {
+			return fmt.Errorf("c.MakeDir: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (c *FtpClient) RemoveDir(ctx context.Context, remotePath string) error {
@@ -99,6 +110,11 @@ func (c *FtpClient) UploadFile(ctx context.Context, remotePath string, localPath
 		return err
 	}
 
+	dir, _ := path.Split(remotePath)
+	if err := c.MakeDir(ctx, dir); err != nil {
+		return err
+	}
+
 	h, err := os.Open(localPath)
 	if err != nil {
 		return fmt.Errorf("os.Open: %w", err)
@@ -118,12 +134,62 @@ func (c *FtpClient) RemoveFile(ctx context.Context, remotePath string) error {
 	}
 
 	err := c.client.Delete(remotePath)
-	if err != nil {
-		err, ok := err.(*textproto.Error)
-		if ok && err.Code == 550 {
-			return nil
+	if err != nil && !isIgnorableError(err) {
+		return err
+	}
+
+	return nil
+}
+
+func (c *FtpClient) Remove(ctx context.Context, remotePath string) error {
+	if err := c.init(ctx); err != nil {
+		return err
+	}
+
+	dir, name := path.Split(remotePath)
+	entries, err := c.client.List(dir)
+	if err != nil && !isIgnorableError(err) {
+		return fmt.Errorf("c.List: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.Name != name {
+			continue
+		}
+
+		if entry.Type == ftp.EntryTypeFolder {
+			return c.RemoveDir(ctx, remotePath)
+		}
+		if entry.Type == ftp.EntryTypeFile {
+			return c.RemoveFile(ctx, remotePath)
 		}
 	}
 
-	return err
+	return nil
+}
+
+func isIgnorableError(err error) bool {
+	if err, ok := err.(*textproto.Error); ok && err.Code == 550 {
+		log.Printf("ignore %s", err)
+		return true
+	}
+	return false
+}
+
+func splitPath(dir string) []string {
+	entries := make([]string, 0, 4)
+
+	for {
+		dir = path.Dir(dir)
+		if dir == "." {
+			break
+		}
+		entries = append(entries, dir)
+	}
+
+	for i := 0; i < len(entries)/2; i++ {
+		entries[i], entries[len(entries)-i-1] = entries[len(entries)-i-1], entries[i]
+	}
+
+	return entries
 }

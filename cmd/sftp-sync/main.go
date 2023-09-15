@@ -22,8 +22,13 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
+	remoteClient, err := syncer.NewClient(cfg.Dest)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	watch := watcher.New(cfg.WatchPath, cfg.ExcludePaths)
-	syncer := syncer.New(cfg.WatchPath, cfg.Dest)
+	syncer := syncer.New(cfg.WatchPath, remoteClient)
 
 	ch, err := watch.Watch(ctx, wg)
 	if err != nil {
