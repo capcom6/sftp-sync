@@ -9,6 +9,7 @@ type Config struct {
 	WatchPath    string
 	ExcludePaths []string
 	Dest         string
+	Debug        bool
 }
 
 func (c *Config) validate() error {
@@ -32,6 +33,7 @@ func Parse(args []string) (Config, error) {
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	flagSet.StringVar(&dest, "dest", "", "destination server")
 	flagSet.Var(&exclude, "exclude", "exclude paths")
+	flagSet.BoolVar(&cfg.Debug, "debug", false, "debug mode")
 
 	if err := flagSet.Parse(args); err != nil {
 		return cfg, err

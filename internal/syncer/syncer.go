@@ -8,24 +8,16 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/capcom6/sftp-sync/internal/client"
 )
-
-type RemoteClient interface {
-	MakeDir(ctx context.Context, remotePath string) error
-	RemoveDir(ctx context.Context, remotePath string) error
-
-	UploadFile(ctx context.Context, remotePath string, localPath string) error
-	RemoveFile(ctx context.Context, remotePath string) error
-
-	Remove(ctx context.Context, remotePath string) error
-}
 
 type Syncer struct {
 	RootPath string
-	Client   RemoteClient
+	Client   client.Client
 }
 
-func New(rootPath string, client RemoteClient) *Syncer {
+func New(rootPath string, client client.Client) *Syncer {
 	return &Syncer{
 		RootPath: rootPath,
 		Client:   client,

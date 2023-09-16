@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"sync"
 
+	"github.com/capcom6/sftp-sync/internal/client"
 	"github.com/capcom6/sftp-sync/internal/config"
 	"github.com/capcom6/sftp-sync/internal/syncer"
 	"github.com/capcom6/sftp-sync/internal/watcher"
@@ -22,7 +23,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	remoteClient, err := syncer.NewClient(cfg.Dest)
+	remoteClient, err := client.New(cfg.Dest)
 	if err != nil {
 		log.Fatalln(err)
 	}
