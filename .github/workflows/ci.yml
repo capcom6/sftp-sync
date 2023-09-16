@@ -25,7 +25,7 @@ jobs:
 
       # step 3: install dependencies
       - name: Install all Go dependencies
-        run: go get
+        run: go mod download
 
       # step 4: run test
       - name: go test
@@ -49,7 +49,7 @@ jobs:
 
       # step 3: install dependencies
       - name: Install all Go dependencies
-        run: go get
+        run: go mod download
 
       # step 4: build module
       - name: go build
