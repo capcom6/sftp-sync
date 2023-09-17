@@ -3,6 +3,8 @@ package config
 import (
 	"flag"
 	"fmt"
+	"os"
+	"path"
 )
 
 type Config struct {
@@ -34,6 +36,12 @@ func Parse(args []string) (Config, error) {
 	flagSet.StringVar(&dest, "dest", "", "destination server")
 	flagSet.Var(&exclude, "exclude", "exclude paths")
 	flagSet.BoolVar(&cfg.Debug, "debug", false, "debug mode")
+
+	flagSet.Usage = func() {
+		fmt.Printf("Usage: %s [flags]\n", path.Base(os.Args[0]))
+		printVersion()
+		flagSet.PrintDefaults()
+	}
 
 	if err := flagSet.Parse(args); err != nil {
 		return cfg, err

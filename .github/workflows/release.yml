@@ -30,7 +30,13 @@ jobs:
       - name: Checkout the repository
         uses: actions/checkout@v4
 
-      # step 2: generate build files
+      # step 2: set env
+      - name: Set APP_VERSION env
+        run: echo APP_VERSION=$(echo ${GITHUB_REF} | rev | cut -d'/' -f 1 | rev ) >> ${GITHUB_ENV}
+      - name: Set BUILD_TIME env
+        run: echo BUILD_TIME=$(date) >> ${GITHUB_ENV}
+
+      # step 3: generate build files
       - name: Build
         uses: wangyoucao577/go-release-action@v1
         with:
@@ -39,13 +45,5 @@ jobs:
           goarch: ${{ matrix.arch }}
           project_path: "./cmd/${{ github.event.repository.name }}"
           goversion: "1.20"
-          # ldflags: "-X 'main.Version=$PRODUCT_VERSION' -X 'main.Revision=$PRODUCT_REVISION' -X 'main.RevisionTime=$PRODUCT_REVISION_TIME"
+          ldflags: -X "github.com/capcom6/sftp-sync/internal/config.appVersion=${{ env.APP_VERSION }}" -X "github.com/capcom6/sftp-sync/internal/config.buildTime=${{ env.BUILD_TIME }}" -X github.com/capcom6/sftp-sync/internal/config.gitCommit=${{ github.sha }} -X github.com/capcom6/sftp-sync/internal/config.gitRef=${{ github.ref }}
           extra_files: LICENSE README.md
-
-      # step 3: upload build-artifacts
-      # - name: Upload build-artifacts
-      #   uses: skx/github-action-publish-binaries@master
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     args: "./sftp-sync/out/*.zip"

@@ -14,6 +14,12 @@ import (
 )
 
 func main() {
+	// flag.Usage = func() {
+	// 	fmt.Printf("Usage: %s [flags]\n", os.Args[0])
+	// 	printVersion()
+	// 	flag.PrintDefaults()
+	// }
+
 	cfg, err := config.Parse(os.Args[1:])
 	if err != nil {
 		log.Fatalln(err)
