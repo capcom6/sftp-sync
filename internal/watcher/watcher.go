@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,6 +16,7 @@ type Watcher struct {
 	RootPath string
 	Excludes []string
 
+	absRootPath string
 	absExcludes []string
 	fswatcher   *fsnotify.Watcher
 	events      chan Event
@@ -34,22 +34,22 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 		return w.events, nil
 	}
 
-	rootPath, err := w.prepareRoot()
-	if err != nil {
+	if err := w.prepareRoot(); err != nil {
 		return nil, fmt.Errorf("prepareRoot: %w", err)
 	}
 
 	w.absExcludes = make([]string, 0, len(w.Excludes))
 	for _, exclude := range w.Excludes {
-		w.absExcludes = append(w.absExcludes, path.Join(rootPath, exclude))
+		w.absExcludes = append(w.absExcludes, filepath.Join(w.absRootPath, exclude))
 	}
 
+	var err error
 	w.fswatcher, err = fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("fsnotify.NewWatcher: %w", err)
 	}
 
-	if err := w.addRecursive(rootPath); err != nil {
+	if err := w.addRecursive(w.absRootPath); err != nil {
 		return nil, fmt.Errorf("addRecursive: %w", err)
 	}
 
@@ -97,10 +97,6 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 }
 
 func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error {
-	// defer func() {
-	// 	fmt.Printf("%+v\n", w.fswatcher.WatchList())
-	// }()
-
 	if source.Op == fsnotify.Chmod {
 		return nil
 	}
@@ -139,7 +135,7 @@ func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error
 		return nil
 	}
 
-	relPath, err := filepath.Rel(w.RootPath, source.Name)
+	relPath, err := filepath.Rel(w.absRootPath, source.Name)
 	if err != nil {
 		return fmt.Errorf("filepath.Rel: %w", err)
 	}
@@ -168,19 +164,21 @@ func (w *Watcher) isDir(fullpath string) (bool, error) {
 	return info.IsDir(), nil
 }
 
-func (w *Watcher) prepareRoot() (string, error) {
+func (w *Watcher) prepareRoot() error {
 	rootPath, err := filepath.Abs(w.RootPath)
 	if err != nil {
-		return rootPath, fmt.Errorf("filepath.Abs: %w", err)
+		return fmt.Errorf("filepath.Abs: %w", err)
 	}
 
 	if ok, err := w.isDir(rootPath); err != nil {
-		return rootPath, fmt.Errorf("isDir: %w", err)
+		return fmt.Errorf("isDir: %w", err)
 	} else if !ok {
-		return rootPath, fmt.Errorf("%s is not a directory", rootPath)
+		return fmt.Errorf("%s is not a directory", rootPath)
 	}
 
-	return rootPath, nil
+	w.absRootPath = rootPath
+
+	return nil
 }
 
 func (w *Watcher) addRecursive(path string) error {

@@ -77,10 +77,13 @@ func (c *FtpClient) MakeDir(ctx context.Context, remotePath string) error {
 		return err
 	}
 
+	if remotePath == "" {
+		// root path
+		return nil
+	}
+
 	dirs := splitPath(remotePath)
 	dirs = append(dirs, remotePath)
-
-	log.Println("MakeDir:", dirs)
 
 	for _, dir := range dirs {
 		if err := c.client.MakeDir(dir); err != nil && !isIgnorableError(err) {
