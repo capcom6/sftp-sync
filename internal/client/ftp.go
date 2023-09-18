@@ -115,8 +115,6 @@ func (c *FtpClient) UploadFile(ctx context.Context, remotePath string, localPath
 		return err
 	}
 
-	log.Println("UploadFile:", remotePath)
-
 	dir, _ := path.Split(remotePath)
 	if err := c.MakeDir(ctx, dir); err != nil {
 		return err
