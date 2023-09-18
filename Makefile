@@ -7,6 +7,6 @@ run:
 	go run cmd/$(project_name)/main.go
 
 test:
-	go test ./...
+	go test -cover ./...
 
 .PHONY: init run test

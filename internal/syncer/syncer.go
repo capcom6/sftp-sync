@@ -41,7 +41,7 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 	}
 
 	if !exists {
-		if err := s.Client.Remove(ctx, filepath.ToSlash(relPath)); err != nil {
+		if err := s.Client.Remove(ctx, pathNormalize(relPath)); err != nil {
 			return fmt.Errorf("c.Remove: %w", err)
 		}
 
@@ -58,7 +58,7 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 }
 
 func (s *Syncer) syncFile(ctx context.Context, absPath, relPath string) error {
-	if err := s.Client.UploadFile(ctx, filepath.ToSlash(relPath), filepath.ToSlash(absPath)); err != nil {
+	if err := s.Client.UploadFile(ctx, pathNormalize(relPath), pathNormalize(absPath)); err != nil {
 		return fmt.Errorf("c.UploadFile: %w", err)
 	}
 
@@ -68,7 +68,7 @@ func (s *Syncer) syncFile(ctx context.Context, absPath, relPath string) error {
 }
 
 func (s *Syncer) syncDir(ctx context.Context, absPath, relPath string) error {
-	if err := s.Client.MakeDir(ctx, filepath.ToSlash(relPath)); err != nil {
+	if err := s.Client.MakeDir(ctx, pathNormalize(relPath)); err != nil {
 		return fmt.Errorf("c.MakeDir: %w", err)
 	}
 	log.Printf("+++ %s\n", relPath)
@@ -104,4 +104,8 @@ func fsInfo(path string) (bool, bool, error) {
 	}
 
 	return true, fi.IsDir(), nil
+}
+
+func pathNormalize(path string) string {
+	return filepath.ToSlash(path)
 }

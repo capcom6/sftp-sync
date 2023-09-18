@@ -78,7 +78,9 @@ func (c *FtpClient) MakeDir(ctx context.Context, remotePath string) error {
 	}
 
 	dirs := splitPath(remotePath)
-	// dirs = append(dirs, remotePath)
+	dirs = append(dirs, remotePath)
+
+	log.Println("MakeDir:", dirs)
 
 	for _, dir := range dirs {
 		if err := c.client.MakeDir(dir); err != nil && !isIgnorableError(err) {
@@ -109,6 +111,8 @@ func (c *FtpClient) UploadFile(ctx context.Context, remotePath string, localPath
 	if err := c.init(ctx); err != nil {
 		return err
 	}
+
+	log.Println("UploadFile:", remotePath)
 
 	dir, _ := path.Split(remotePath)
 	if err := c.MakeDir(ctx, dir); err != nil {
@@ -179,9 +183,11 @@ func isIgnorableError(err error) bool {
 func splitPath(dir string) []string {
 	entries := make([]string, 0, 4)
 
+	dir = path.Clean(dir)
+
 	for {
 		dir = path.Dir(dir)
-		if dir == "." {
+		if dir == "." || dir == "/" {
 			break
 		}
 		entries = append(entries, dir)
