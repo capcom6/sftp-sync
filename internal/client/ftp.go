@@ -77,6 +77,11 @@ func (c *FtpClient) MakeDir(ctx context.Context, remotePath string) error {
 		return err
 	}
 
+	if remotePath == "" {
+		// root path
+		return nil
+	}
+
 	dirs := splitPath(remotePath)
 	dirs = append(dirs, remotePath)
 
@@ -179,9 +184,11 @@ func isIgnorableError(err error) bool {
 func splitPath(dir string) []string {
 	entries := make([]string, 0, 4)
 
+	dir = path.Clean(dir)
+
 	for {
 		dir = path.Dir(dir)
-		if dir == "." {
+		if dir == "." || dir == "/" {
 			break
 		}
 		entries = append(entries, dir)

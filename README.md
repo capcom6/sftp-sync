@@ -2,6 +2,20 @@
 
 sftp-sync is a command-line utility for syncing a local folder with a remote FTP server on every change of files or directories.
 
+## Table of contents
+
+- [sftp-sync](#sftp-sync)
+  - [Table of contents](#table-of-contents)
+  - [Features](#features)
+  - [Installation](#installation)
+  - [Usage](#usage)
+    - [Options](#options)
+    - [Arguments](#arguments)
+  - [Roadmap](#roadmap)
+  - [Contributing](#contributing)
+  - [License](#license)
+
+
 ## Features
 
 - Continuous synchronization: Automatically syncs local changes to the remote FTP server whenever files or directories are added, modified, or deleted.
@@ -51,12 +65,16 @@ ftp-sync --dest=ftp://username:password@hostname:port/path/to/remote/folder --ex
 
 Here are some ideas and suggestions for future releases:
 
-- Support for patterns in the `--exclude` option.
-- Support of Secure FTP (SFTP) protocol.
-- Improved error handling and error messages.
-- Integration with popular version control systems (e.g., Git) for automatic syncing on commit or branch changes.
-- Support for other remote protocols such as S3.
-- Support for syncing specific file types or file name patterns.
+- [ ] Support for patterns in the `--exclude` option.
+- [ ] Support of Secure FTP (SFTP) protocol.
+- [ ] Improved error handling and error messages.
+- [ ] Integration with Git for automatic syncing on commit or branch changes.
+- [ ] Integration with Git for linking branch to remote server.
+- [ ] Support for other remote protocols such as S3.
+- [ ] Support for syncing specific file types or file name patterns.
+- [ ] Preserve attributes (if available).
+- [ ] Parallel sync in multiple threads.
+- [ ] Batching events for more effective sync on frequently changes.
 
 Feel free to open an issue or submit a pull request if you have any other ideas or suggestions!
 
