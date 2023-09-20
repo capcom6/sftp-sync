@@ -31,7 +31,12 @@ func (c *FtpClient) init(ctx context.Context) error {
 	defer c.lock.Unlock()
 
 	if c.client != nil {
-		return c.ping(ctx)
+		if err := c.ping(ctx); err == nil {
+			return nil
+		}
+
+		c.client.Quit()
+		c.client = nil
 	}
 
 	u, err := url.Parse(c.URL)
