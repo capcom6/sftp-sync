@@ -3,13 +3,13 @@ package client
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/textproto"
 	"net/url"
 	"os"
 	"path"
 	"sync"
 
+	"github.com/capcom6/logutils"
 	"github.com/jlaffaye/ftp"
 )
 
@@ -33,6 +33,8 @@ func (c *FtpClient) init(ctx context.Context) error {
 	if c.client != nil {
 		if err := c.ping(ctx); err == nil {
 			return nil
+		} else {
+			logutils.Debugln("Reconnecting because of error:", err)
 		}
 
 		c.client.Quit()
@@ -41,7 +43,7 @@ func (c *FtpClient) init(ctx context.Context) error {
 
 	u, err := url.Parse(c.URL)
 	if err != nil {
-		return fmt.Errorf("url.Parse: %w", err)
+		return fmt.Errorf("can't parse URL: %w", err)
 	}
 
 	if u.Scheme != "ftp" {
@@ -50,7 +52,7 @@ func (c *FtpClient) init(ctx context.Context) error {
 
 	c.client, err = ftp.Dial(u.Host, ftp.DialWithContext(ctx))
 	if err != nil {
-		return fmt.Errorf("ftp.Dial: %w", err)
+		return fmt.Errorf("can't connect to %s: %w", u.Host, err)
 	}
 
 	password, ok := u.User.Password()
@@ -59,11 +61,11 @@ func (c *FtpClient) init(ctx context.Context) error {
 	}
 
 	if err := c.client.Login(u.User.Username(), password); err != nil {
-		return fmt.Errorf("c.Login: %w", err)
+		return fmt.Errorf("can't login as %s: %w", u.User.Username(), err)
 	}
 
 	if err := c.client.ChangeDir(u.Path); err != nil {
-		return fmt.Errorf("c.ChangeDir: %w", err)
+		return fmt.Errorf("can't change directory to %s: %w", u.Path, err)
 	}
 
 	return nil
@@ -92,7 +94,7 @@ func (c *FtpClient) MakeDir(ctx context.Context, remotePath string) error {
 
 	for _, dir := range dirs {
 		if err := c.client.MakeDir(dir); err != nil && !isIgnorableError(err) {
-			return fmt.Errorf("c.MakeDir: %w", err)
+			return fmt.Errorf("can't make directory %s: %w", dir, err)
 		}
 	}
 
@@ -127,12 +129,12 @@ func (c *FtpClient) UploadFile(ctx context.Context, remotePath string, localPath
 
 	h, err := os.Open(localPath)
 	if err != nil {
-		return fmt.Errorf("os.Open: %w", err)
+		return fmt.Errorf("can't open local file %s: %w", localPath, err)
 	}
 	defer h.Close()
 
 	if err := c.client.Stor(remotePath, h); err != nil {
-		return fmt.Errorf("c.Stor: %w", err)
+		return fmt.Errorf("can't upload file to %s: %w", remotePath, err)
 	}
 
 	return nil
@@ -159,7 +161,7 @@ func (c *FtpClient) Remove(ctx context.Context, remotePath string) error {
 	dir, name := path.Split(remotePath)
 	entries, err := c.client.List(dir)
 	if err != nil && !isIgnorableError(err) {
-		return fmt.Errorf("c.List: %w", err)
+		return fmt.Errorf("can't list directory %s: %w", dir, err)
 	}
 
 	for _, entry := range entries {
@@ -180,7 +182,7 @@ func (c *FtpClient) Remove(ctx context.Context, remotePath string) error {
 
 func isIgnorableError(err error) bool {
 	if err, ok := err.(*textproto.Error); ok && err.Code == 550 {
-		log.Printf("ignore %s", err)
+		logutils.Debugf("ignore error %s", err)
 		return true
 	}
 	return false

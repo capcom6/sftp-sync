@@ -33,13 +33,15 @@ func Parse(args []string) (Config, error) {
 	exclude := make(arrayValue, 0, 1)
 
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
+	flagSet.SetOutput(os.Stdout)
 	flagSet.StringVar(&dest, "dest", "", "destination server")
 	flagSet.Var(&exclude, "exclude", "exclude paths")
 	flagSet.BoolVar(&cfg.Debug, "debug", false, "debug mode")
 
 	flagSet.Usage = func() {
-		fmt.Printf("Usage: %s [flags]\n", path.Base(os.Args[0]))
+		fmt.Println("(S)FTP Syncer")
 		printVersion()
+		fmt.Printf("Usage: %s [flags]\n", path.Base(os.Args[0]))
 		flagSet.PrintDefaults()
 	}
 

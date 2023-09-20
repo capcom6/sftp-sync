@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"sync"
 
+	"github.com/capcom6/logutils"
 	"github.com/capcom6/sftp-sync/internal/client"
 	"github.com/capcom6/sftp-sync/internal/config"
 	"github.com/capcom6/sftp-sync/internal/syncer"
@@ -14,16 +15,11 @@ import (
 )
 
 func main() {
-	// flag.Usage = func() {
-	// 	fmt.Printf("Usage: %s [flags]\n", os.Args[0])
-	// 	printVersion()
-	// 	flag.PrintDefaults()
-	// }
-
 	cfg, err := config.Parse(os.Args[1:])
 	if err != nil {
 		log.Fatalln(err)
 	}
+	setUpLogging(cfg)
 
 	wg := &sync.WaitGroup{}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -31,7 +27,7 @@ func main() {
 
 	remoteClient, err := client.New(cfg.Dest)
 	if err != nil {
-		log.Fatalln(err)
+		logutils.Fatalln(err)
 	}
 
 	watch := watcher.New(cfg.WatchPath, cfg.ExcludePaths)
@@ -49,9 +45,10 @@ func main() {
 			select {
 			case event, ok := <-ch:
 				if !ok {
+					logutils.Fatalln("watcher channel closed")
 					return
 				}
-				// log.Println("event:", event)
+				logutils.Debug("event:", event)
 				err := syncer.Sync(ctx, event.AbsPath)
 				if err != nil {
 					log.Println(err)
@@ -66,4 +63,19 @@ func main() {
 	wg.Wait()
 
 	log.Println("Bye!")
+}
+
+func setUpLogging(cfg config.Config) {
+	logLevel := "INFO"
+	if cfg.Debug {
+		logLevel = "DEBUG"
+	}
+
+	filter := logutils.LevelFilter{
+		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR"},
+		MinLevel: logutils.LogLevel(logLevel),
+		Writer:   os.Stdout,
+	}
+
+	log.SetOutput(&filter)
 }
