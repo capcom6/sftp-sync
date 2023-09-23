@@ -3,12 +3,12 @@ package watcher
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/capcom6/logutils"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -77,16 +77,16 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 					continue
 				}
 
-				// log.Println("event:", event)
+				logutils.Debug("event:", event)
 				if err := w.processEvent(ctx, event); err != nil {
-					log.Println("error:", err)
+					logutils.Error(err)
 				}
 
 			case err, ok := <-w.fswatcher.Errors:
 				if !ok {
 					return
 				}
-				log.Println("error:", err)
+				logutils.Error(err)
 			case <-ctx.Done():
 				return
 			}

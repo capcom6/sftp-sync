@@ -49,13 +49,14 @@ Then, follow these steps:
 Run the `sftp-sync` command followed by the necessary options and arguments:
 
 ```shell
-ftp-sync --dest=ftp://username:password@hostname:port/path/to/remote/folder --exclude=.git /path/to/local/folder
+sftp-sync --dest=ftp://username:password@hostname:port/path/to/remote/folder --exclude=.git /path/to/local/folder
 ```
 
 ### Options
 
 - `--dest`: The destination FTP server URL. It should follow the format `ftp://username:password@hostname:port/path/to/remote/folder`.
 - `--exclude`: (Optional) Specifies paths or patterns to exclude from the synchronization process. You can specify multiple `--exclude` options to exclude multiple paths or patterns.
+- `--debug`: Enable debug mode.
 
 ### Arguments
 
