@@ -113,6 +113,11 @@ func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error
 		if isDir {
 			if source.Op.Has(fsnotify.Create) {
 				w.addRecursive(fullpath)
+			} else if source.Op.Has(fsnotify.Write) {
+				// when creating a file on windows we have two events:
+				// fsnotify.Create for file and fsnotify.Write for parent directory,
+				// so we need to ignore fsnotify.Write to skip recursive sync
+				return nil
 			}
 		}
 	} else if source.Has(fsnotify.Remove) || source.Has(fsnotify.Rename) {
