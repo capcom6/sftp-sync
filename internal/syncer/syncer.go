@@ -79,6 +79,12 @@ func (s *Syncer) syncDir(ctx context.Context, absPath, relPath string) error {
 	}
 
 	for _, file := range files {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
 		if file.IsDir() {
 			if err := s.syncDir(ctx, path.Join(absPath, file.Name()), path.Join(relPath, file.Name())); err != nil {
 				return err
