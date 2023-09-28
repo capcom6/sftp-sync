@@ -9,4 +9,7 @@ run:
 test:
 	go test -cover ./...
 
-.PHONY: init run test
+install:
+	go install cmd/$(project_name)/main.go
+
+.PHONY: init run test install
