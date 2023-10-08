@@ -10,6 +10,6 @@ test:
 	go test -cover ./...
 
 install:
-	go install cmd/$(project_name)/main.go
+	go install ./cmd/$(project_name)
 
 .PHONY: init run test install
