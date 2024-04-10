@@ -38,7 +38,7 @@ Then, follow these steps:
 2. Build the sftp-sync binary using the following command:
     ```shell
     cd sftp-sync
-    go build -o sftp-sync cmd/sftp-sync/main.go
+    go build -o sftp-sync .
     ```
 
 3. The binary will be generated in the current directory. You can move it to a location in your PATH for easy access.

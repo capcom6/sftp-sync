@@ -4,12 +4,12 @@ init:
 	go mod download
 
 run:
-	go run cmd/$(project_name)/main.go
+	go run .
 
 test:
 	go test -cover ./...
 
 install:
-	go install ./cmd/$(project_name)
+	go install .
 
 .PHONY: init run test install

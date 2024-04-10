@@ -43,7 +43,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: ${{ matrix.os }}
           goarch: ${{ matrix.arch }}
-          project_path: "./cmd/${{ github.event.repository.name }}"
+          project_path: "."
           goversion: "1.20"
           ldflags: -X "github.com/capcom6/sftp-sync/internal/config.appVersion=${{ env.APP_VERSION }}" -X "github.com/capcom6/sftp-sync/internal/config.buildTime=${{ env.BUILD_TIME }}" -X github.com/capcom6/sftp-sync/internal/config.gitCommit=${{ github.sha }} -X github.com/capcom6/sftp-sync/internal/config.gitRef=${{ github.ref }}
           extra_files: LICENSE README.md

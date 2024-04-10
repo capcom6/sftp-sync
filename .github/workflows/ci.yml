@@ -53,7 +53,7 @@ jobs:
 
       # step 4: build module
       - name: go build
-        run: go build -o sftp-sync cmd/${{ github.event.repository.name }}/main.go
+        run: go build -o sftp-sync .
 
       # step 5: see usage information
       - name: ./sftp-sync --help
