@@ -35,7 +35,8 @@ func main() {
 
 	ch, err := watch.Watch(ctx, wg)
 	if err != nil {
-		log.Fatalln(err)
+		logutils.Fatalln(err)
+		return
 	}
 
 	wg.Add(1)
@@ -49,9 +50,8 @@ func main() {
 					return
 				}
 				logutils.Debug("event:", event)
-				err := syncer.Sync(ctx, event.AbsPath)
-				if err != nil {
-					log.Println(err)
+				if syncErr := syncer.Sync(ctx, event.AbsPath); syncErr != nil {
+					log.Println(syncErr)
 				}
 			case <-ctx.Done():
 				return
