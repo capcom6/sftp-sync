@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
 
+	"github.com/capcom6/logutils"
 	"github.com/capcom6/sftp-sync/internal/client"
 )
 
@@ -41,11 +41,11 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 	}
 
 	if !exists {
-		if err := s.Client.Remove(ctx, pathNormalize(relPath)); err != nil {
-			return fmt.Errorf("c.Remove: %w", err)
+		if rmErr := s.Client.Remove(ctx, pathNormalize(relPath)); rmErr != nil {
+			return fmt.Errorf("c.Remove: %w", rmErr)
 		}
 
-		log.Printf("--- %s\n", relPath)
+		logutils.Printf("--- %s\n", relPath)
 
 		return nil
 	}
@@ -62,7 +62,7 @@ func (s *Syncer) syncFile(ctx context.Context, absPath, relPath string) error {
 		return fmt.Errorf("c.UploadFile: %w", err)
 	}
 
-	log.Printf("--> %s\n", relPath)
+	logutils.Printf("--> %s\n", relPath)
 
 	return nil
 }
@@ -71,7 +71,7 @@ func (s *Syncer) syncDir(ctx context.Context, absPath, relPath string) error {
 	if err := s.Client.MakeDir(ctx, pathNormalize(relPath)); err != nil {
 		return fmt.Errorf("c.MakeDir: %w", err)
 	}
-	log.Printf("+++ %s\n", relPath)
+	logutils.Printf("+++ %s\n", relPath)
 
 	files, err := os.ReadDir(absPath)
 	if err != nil {
@@ -86,12 +86,12 @@ func (s *Syncer) syncDir(ctx context.Context, absPath, relPath string) error {
 		}
 
 		if file.IsDir() {
-			if err := s.syncDir(ctx, path.Join(absPath, file.Name()), path.Join(relPath, file.Name())); err != nil {
-				return err
+			if dErr := s.syncDir(ctx, path.Join(absPath, file.Name()), path.Join(relPath, file.Name())); dErr != nil {
+				return dErr
 			}
 		} else {
-			if err := s.syncFile(ctx, path.Join(absPath, file.Name()), path.Join(relPath, file.Name())); err != nil {
-				return err
+			if fErr := s.syncFile(ctx, path.Join(absPath, file.Name()), path.Join(relPath, file.Name())); fErr != nil {
+				return fErr
 			}
 		}
 	}
@@ -104,7 +104,6 @@ func fsInfo(path string) (bool, bool, error) {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, false, nil
-
 		}
 		return false, false, fmt.Errorf("os.Stat: %w", err)
 	}

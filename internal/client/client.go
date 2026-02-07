@@ -19,12 +19,12 @@ type Client interface {
 func New(address string) (Client, error) {
 	u, err := url.Parse(address)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse URL: %w", err)
 	}
 
 	if u.Scheme == "ftp" {
 		return NewFtpClient(address), nil
 	}
 
-	return nil, fmt.Errorf("unsupported scheme: %s", u.Scheme)
+	return nil, fmt.Errorf("%w: %s", ErrUnsupportedScheme, u.Scheme)
 }

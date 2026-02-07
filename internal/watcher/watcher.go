@@ -13,8 +13,8 @@ import (
 )
 
 type Watcher struct {
-	RootPath string
-	Excludes []string
+	rootPath string
+	excludes []string
 
 	absRootPath string
 	absExcludes []string
@@ -24,8 +24,13 @@ type Watcher struct {
 
 func New(rootPath string, excludes []string) *Watcher {
 	return &Watcher{
-		RootPath: rootPath,
-		Excludes: excludes,
+		rootPath: rootPath,
+		excludes: excludes,
+
+		absRootPath: "",
+		absExcludes: nil,
+		fswatcher:   nil,
+		events:      nil,
 	}
 }
 
@@ -38,8 +43,8 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 		return nil, fmt.Errorf("prepareRoot: %w", err)
 	}
 
-	w.absExcludes = make([]string, 0, len(w.Excludes))
-	for _, exclude := range w.Excludes {
+	w.absExcludes = make([]string, 0, len(w.excludes))
+	for _, exclude := range w.excludes {
 		w.absExcludes = append(w.absExcludes, filepath.Join(w.absRootPath, exclude))
 	}
 
@@ -49,51 +54,57 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 		return nil, fmt.Errorf("fsnotify.NewWatcher: %w", err)
 	}
 
-	if err := w.addRecursive(w.absRootPath); err != nil {
-		return nil, fmt.Errorf("addRecursive: %w", err)
+	if addErr := w.addRecursive(w.absRootPath); addErr != nil {
+		_ = w.fswatcher.Close()
+		w.fswatcher = nil
+		return nil, fmt.Errorf("addRecursive: %w", addErr)
 	}
 
 	w.events = make(chan Event)
 
 	wg.Add(1)
 	go func() {
-		defer func() {
-			w.fswatcher.Close()
-			close(w.events)
-			w.fswatcher = nil
-			w.absExcludes = nil
-			w.events = nil
-			wg.Done()
-		}()
-
-		for {
-			select {
-			case event, ok := <-w.fswatcher.Events:
-				if !ok {
-					return
-				}
-
-				if w.isExcluded(event.Name) {
-					continue
-				}
-
-				logutils.Debug("event:", event)
-				if err := w.processEvent(ctx, event); err != nil {
-					logutils.Error(err)
-				}
-
-			case err, ok := <-w.fswatcher.Errors:
-				if !ok {
-					return
-				}
-				logutils.Error(err)
-			case <-ctx.Done():
-				return
-			}
-		}
+		defer wg.Done()
+		w.runWatcher(ctx)
 	}()
 
 	return w.events, nil
+}
+
+func (w *Watcher) runWatcher(ctx context.Context) {
+	defer func() {
+		_ = w.fswatcher.Close()
+		close(w.events)
+		w.fswatcher = nil
+		w.absExcludes = nil
+		w.events = nil
+	}()
+
+	for {
+		select {
+		case event, ok := <-w.fswatcher.Events:
+			if !ok {
+				return
+			}
+
+			if w.isExcluded(event.Name) {
+				continue
+			}
+
+			logutils.Debug("event:", event)
+			if prErr := w.processEvent(ctx, event); prErr != nil {
+				logutils.Error(prErr)
+			}
+
+		case watchErr, ok := <-w.fswatcher.Errors:
+			if !ok {
+				return
+			}
+			logutils.Error(watchErr)
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error {
@@ -104,39 +115,23 @@ func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error
 		return nil
 	}
 
-	if !source.Has(fsnotify.Rename) && !source.Has(fsnotify.Remove) {
-		fullpath := source.Name
-		isDir, err := w.isDir(fullpath)
-		if err != nil {
-			return fmt.Errorf("isDir: %w", err)
-		}
-		if isDir {
-			if source.Op.Has(fsnotify.Create) {
-				w.addRecursive(fullpath)
-			} else if source.Op.Has(fsnotify.Write) {
-				// when creating a file on windows we have two events:
-				// fsnotify.Create for file and fsnotify.Write for parent directory,
-				// so we need to ignore fsnotify.Write to skip recursive sync
-				return nil
-			}
-		}
-	} else if source.Has(fsnotify.Remove) || source.Has(fsnotify.Rename) {
-		wl := w.fswatcher.WatchList()
-		for _, entry := range wl {
-			if strings.HasPrefix(entry, source.Name) {
-				w.fswatcher.Remove(entry)
-			}
-		}
+	proceed, err := w.updateObservers(source)
+	if err != nil {
+		return fmt.Errorf("updateObservers: %w", err)
+	}
+	if !proceed {
+		return nil
 	}
 
 	var eventType EventType
-	if source.Has(fsnotify.Remove) || source.Has(fsnotify.Rename) {
+	switch {
+	case source.Has(fsnotify.Remove), source.Has(fsnotify.Rename):
 		eventType = EventRemoved
-	} else if source.Has(fsnotify.Create) {
+	case source.Has(fsnotify.Create):
 		eventType = EventCreated
-	} else if source.Has(fsnotify.Write) {
+	case source.Has(fsnotify.Write):
 		eventType = EventModified
-	} else {
+	default:
 		return nil
 	}
 
@@ -160,6 +155,50 @@ func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error
 	return nil
 }
 
+// updateObservers handles fsnotify events for directories.
+// When fsnotify.Remove or fsnotify.Rename event is received, it removes
+// corresponding watcher from the list of watched paths.
+// When fsnotify.Create event is received, it adds the watched path
+// recursively.
+// When fsnotify.Write event is received, it skips recursive sync.
+// The function returns true if the event needs to be processed
+// further and false otherwise.
+func (w *Watcher) updateObservers(source fsnotify.Event) (bool, error) {
+	if source.Has(fsnotify.Remove) || source.Has(fsnotify.Rename) {
+		wl := w.fswatcher.WatchList()
+		for _, entry := range wl {
+			if entry == source.Name || strings.HasPrefix(entry, source.Name+string(filepath.Separator)) {
+				_ = w.fswatcher.Remove(entry)
+			}
+		}
+
+		return true, nil
+	}
+
+	fullpath := source.Name
+	isDir, err := w.isDir(fullpath)
+	if err != nil {
+		return false, fmt.Errorf("isDir: %w", err)
+	}
+
+	if !isDir {
+		return true, nil
+	}
+
+	if source.Op.Has(fsnotify.Create) {
+		if addErr := w.addRecursive(fullpath); addErr != nil {
+			return false, fmt.Errorf("addRecursive: %w", addErr)
+		}
+	} else if source.Op.Has(fsnotify.Write) {
+		// when creating a file on windows we have two events:
+		// fsnotify.Create for file and fsnotify.Write for parent directory,
+		// so we need to ignore fsnotify.Write to skip recursive sync
+		return false, nil
+	}
+
+	return true, nil
+}
+
 func (w *Watcher) isDir(fullpath string) (bool, error) {
 	info, err := os.Stat(fullpath)
 	if err != nil {
@@ -170,15 +209,15 @@ func (w *Watcher) isDir(fullpath string) (bool, error) {
 }
 
 func (w *Watcher) prepareRoot() error {
-	rootPath, err := filepath.Abs(w.RootPath)
+	rootPath, err := filepath.Abs(w.rootPath)
 	if err != nil {
 		return fmt.Errorf("filepath.Abs: %w", err)
 	}
 
-	if ok, err := w.isDir(rootPath); err != nil {
-		return fmt.Errorf("isDir: %w", err)
+	if ok, dirErr := w.isDir(rootPath); dirErr != nil {
+		return fmt.Errorf("isDir: %w", dirErr)
 	} else if !ok {
-		return fmt.Errorf("%s is not a directory", rootPath)
+		return fmt.Errorf("%w: %s", ErrIsNotDir, rootPath)
 	}
 
 	w.absRootPath = rootPath
@@ -206,10 +245,9 @@ func (w *Watcher) addRecursive(path string) error {
 			continue
 		}
 
-		path := filepath.Join(path, entry.Name())
-		err := w.addRecursive(path)
-		if err != nil {
-			return err
+		entryPath := filepath.Join(path, entry.Name())
+		if addErr := w.addRecursive(entryPath); addErr != nil {
+			return addErr
 		}
 	}
 
@@ -218,7 +256,7 @@ func (w *Watcher) addRecursive(path string) error {
 
 func (w *Watcher) isExcluded(fullpath string) bool {
 	for _, exclude := range w.absExcludes {
-		if strings.HasPrefix(fullpath, exclude) {
+		if fullpath == exclude || strings.HasPrefix(fullpath, exclude+string(filepath.Separator)) {
 			return true
 		}
 	}

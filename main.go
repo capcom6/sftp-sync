@@ -36,7 +36,6 @@ func main() {
 	ch, err := watch.Watch(ctx, wg)
 	if err != nil {
 		logutils.Fatalln(err)
-		return
 	}
 
 	wg.Add(1)
@@ -46,12 +45,13 @@ func main() {
 			select {
 			case event, ok := <-ch:
 				if !ok {
-					logutils.Fatalln("watcher channel closed")
+					logutils.Errorln("watcher channel closed")
+					cancel()
 					return
 				}
 				logutils.Debug("event:", event)
 				if syncErr := syncer.Sync(ctx, event.AbsPath); syncErr != nil {
-					log.Println(syncErr)
+					logutils.Errorln(syncErr)
 				}
 			case <-ctx.Done():
 				return
@@ -59,10 +59,10 @@ func main() {
 		}
 	}()
 
-	log.Println("Watching...")
+	logutils.Println("Watching...")
 	wg.Wait()
 
-	log.Println("Bye!")
+	logutils.Println("Bye!")
 }
 
 func setUpLogging(cfg config.Config) {

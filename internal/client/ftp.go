@@ -7,14 +7,16 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strings"
 	"sync"
 
 	"github.com/capcom6/logutils"
 	"github.com/jlaffaye/ftp"
+	"github.com/samber/lo"
 )
 
 type FtpClient struct {
-	URL string
+	url string
 
 	client *ftp.ServerConn
 	lock   sync.Mutex
@@ -22,7 +24,10 @@ type FtpClient struct {
 
 func NewFtpClient(url string) *FtpClient {
 	return &FtpClient{
-		URL: url,
+		url: url,
+
+		client: nil,
+		lock:   sync.Mutex{},
 	}
 }
 
@@ -31,23 +36,24 @@ func (c *FtpClient) init(ctx context.Context) error {
 	defer c.lock.Unlock()
 
 	if c.client != nil {
-		if err := c.ping(ctx); err == nil {
+		var err error
+		if err = c.ping(ctx); err == nil {
 			return nil
-		} else {
-			logutils.Debugln("Reconnecting because of error:", err)
 		}
 
-		c.client.Quit()
+		logutils.Debugln("Reconnecting because of error:", err)
+
+		_ = c.client.Quit()
 		c.client = nil
 	}
 
-	u, err := url.Parse(c.URL)
+	u, err := url.Parse(c.url)
 	if err != nil {
 		return fmt.Errorf("can't parse URL: %w", err)
 	}
 
 	if u.Scheme != "ftp" {
-		return fmt.Errorf("unsupported scheme: %s", u.Scheme)
+		return fmt.Errorf("%w: %s", ErrUnsupportedScheme, u.Scheme)
 	}
 
 	c.client, err = ftp.Dial(u.Host, ftp.DialWithContext(ctx))
@@ -60,23 +66,27 @@ func (c *FtpClient) init(ctx context.Context) error {
 		password = ""
 	}
 
-	if err := c.client.Login(u.User.Username(), password); err != nil {
-		return fmt.Errorf("can't login as %s: %w", u.User.Username(), err)
+	if loginErr := c.client.Login(u.User.Username(), password); loginErr != nil {
+		return fmt.Errorf("can't login as %s: %w", u.User.Username(), loginErr)
 	}
 
-	if err := c.client.ChangeDir(u.Path); err != nil {
-		return fmt.Errorf("can't change directory to %s: %w", u.Path, err)
+	if chErr := c.client.ChangeDir(u.Path); chErr != nil {
+		return fmt.Errorf("can't change directory to %s: %w", u.Path, chErr)
 	}
 
 	return nil
 }
 
-func (c *FtpClient) ping(ctx context.Context) error {
+func (c *FtpClient) ping(_ context.Context) error {
 	if c.client == nil {
-		return fmt.Errorf("client is nil")
+		return ErrClientIsNil
 	}
 
-	return c.client.NoOp()
+	if err := c.client.NoOp(); err != nil {
+		return fmt.Errorf("failed to ping: %w", err)
+	}
+
+	return nil
 }
 
 func (c *FtpClient) MakeDir(ctx context.Context, remotePath string) error {
@@ -108,13 +118,13 @@ func (c *FtpClient) RemoveDir(ctx context.Context, remotePath string) error {
 
 	err := c.client.RemoveDirRecur(remotePath)
 	if err != nil {
-		err, ok := err.(*textproto.Error)
-		if ok && err.Code == 550 {
+		if err, ok := lo.ErrorsAs[*textproto.Error](err); ok && err.Code == 550 {
 			return nil
 		}
+		return fmt.Errorf("can't remove directory %s: %w", remotePath, err)
 	}
 
-	return err
+	return nil
 }
 
 func (c *FtpClient) UploadFile(ctx context.Context, remotePath string, localPath string) error {
@@ -133,8 +143,8 @@ func (c *FtpClient) UploadFile(ctx context.Context, remotePath string, localPath
 	}
 	defer h.Close()
 
-	if err := c.client.Stor(remotePath, h); err != nil {
-		return fmt.Errorf("can't upload file to %s: %w", remotePath, err)
+	if stErr := c.client.Stor(remotePath, h); stErr != nil {
+		return fmt.Errorf("can't upload file to %s: %w", remotePath, stErr)
 	}
 
 	return nil
@@ -147,7 +157,7 @@ func (c *FtpClient) RemoveFile(ctx context.Context, remotePath string) error {
 
 	err := c.client.Delete(remotePath)
 	if err != nil && !isIgnorableError(err) {
-		return err
+		return fmt.Errorf("failed to remove file %s: %w", remotePath, err)
 	}
 
 	return nil
@@ -181,7 +191,7 @@ func (c *FtpClient) Remove(ctx context.Context, remotePath string) error {
 }
 
 func isIgnorableError(err error) bool {
-	if err, ok := err.(*textproto.Error); ok && err.Code == 550 {
+	if err, ok := lo.ErrorsAs[*textproto.Error](err); ok && err.Code == 550 {
 		logutils.Debugf("ignore error %s", err)
 		return true
 	}
@@ -189,7 +199,7 @@ func isIgnorableError(err error) bool {
 }
 
 func splitPath(dir string) []string {
-	entries := make([]string, 0, 4)
+	entries := make([]string, 0, strings.Count(dir, "/"))
 
 	dir = path.Clean(dir)
 

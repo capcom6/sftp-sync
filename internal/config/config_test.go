@@ -1,8 +1,11 @@
-package config
+package config_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/capcom6/sftp-sync/internal/config"
 )
 
 func TestParse(t *testing.T) {
@@ -12,13 +15,13 @@ func TestParse(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    Config
+		want    config.Config
 		wantErr bool
 	}{
 		{
 			name: "Empty",
 			args: args{},
-			want: Config{
+			want: config.Config{
 				WatchPath:    "",
 				ExcludePaths: []string{},
 				Dest:         "",
@@ -30,7 +33,7 @@ func TestParse(t *testing.T) {
 			args: args{
 				args: []string{"--dest", "dest", "path"},
 			},
-			want: Config{
+			want: config.Config{
 				WatchPath:    "path",
 				ExcludePaths: []string{},
 				Dest:         "dest",
@@ -42,7 +45,7 @@ func TestParse(t *testing.T) {
 			args: args{
 				args: []string{"--dest", "dest", "--exclude", "ex1", "path"},
 			},
-			want: Config{
+			want: config.Config{
 				WatchPath:    "path",
 				ExcludePaths: []string{"ex1"},
 				Dest:         "dest",
@@ -54,7 +57,7 @@ func TestParse(t *testing.T) {
 			args: args{
 				args: []string{"--dest", "dest", "--exclude", "ex1", "--exclude", "ex2", "path"},
 			},
-			want: Config{
+			want: config.Config{
 				WatchPath:    "path",
 				ExcludePaths: []string{"ex1", "ex2"},
 				Dest:         "dest",
@@ -64,10 +67,13 @@ func TestParse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse(tt.args.args)
+			got, err := config.Parse(tt.args.args)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
+			}
+			if tt.wantErr && !errors.Is(err, config.ErrValidationFailed) {
+				t.Errorf("Parse() error = %v, want %v", err, config.ErrValidationFailed)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Parse() = %+#v, want %+#v", got, tt.want)
