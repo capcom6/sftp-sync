@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/capcom6/logutils"
+	logger "github.com/go-core-fx/cli-logger"
 	"github.com/jlaffaye/ftp"
 	"github.com/samber/lo"
 )
@@ -18,13 +18,17 @@ import (
 type FtpClient struct {
 	url string
 
+	logger logger.Logger
+
 	client *ftp.ServerConn
 	lock   sync.Mutex
 }
 
-func NewFtpClient(url string) *FtpClient {
+func NewFtpClient(url string, logger logger.Logger) *FtpClient {
 	return &FtpClient{
 		url: url,
+
+		logger: logger,
 
 		client: nil,
 		lock:   sync.Mutex{},
@@ -41,7 +45,9 @@ func (c *FtpClient) init(ctx context.Context) error {
 			return nil
 		}
 
-		logutils.Debugln("Reconnecting because of error:", err)
+		c.logger.Warn(ctx, "Reconnecting because of error", logger.Fields{
+			"error": err,
+		})
 
 		_ = c.client.Quit()
 		c.client = nil
@@ -192,7 +198,6 @@ func (c *FtpClient) Remove(ctx context.Context, remotePath string) error {
 
 func isIgnorableError(err error) bool {
 	if err, ok := lo.ErrorsAs[*textproto.Error](err); ok && err.Code == 550 {
-		logutils.Debugf("ignore error %s", err)
 		return true
 	}
 	return false
@@ -211,7 +216,7 @@ func splitPath(dir string) []string {
 		entries = append(entries, dir)
 	}
 
-	for i := 0; i < len(entries)/2; i++ {
+	for i := range len(entries) / 2 {
 		entries[i], entries[len(entries)-i-1] = entries[len(entries)-i-1], entries[i]
 	}
 
