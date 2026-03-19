@@ -8,19 +8,23 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/capcom6/logutils"
 	"github.com/capcom6/sftp-sync/internal/client"
+	logger "github.com/go-core-fx/cli-logger"
 )
 
 type Syncer struct {
-	RootPath string
-	Client   client.Client
+	rootPath string
+	client   client.Client
+
+	logger logger.Logger
 }
 
-func New(rootPath string, client client.Client) *Syncer {
+func New(rootPath string, client client.Client, logger logger.Logger) *Syncer {
 	return &Syncer{
-		RootPath: rootPath,
-		Client:   client,
+		rootPath: rootPath,
+		client:   client,
+
+		logger: logger.WithContext("syncer", ""),
 	}
 }
 
@@ -30,7 +34,7 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 		return fmt.Errorf("fsInfo: %w", err)
 	}
 
-	absRoot, err := filepath.Abs(s.RootPath)
+	absRoot, err := filepath.Abs(s.rootPath)
 	if err != nil {
 		return fmt.Errorf("filepath.Abs: %w", err)
 	}
@@ -41,11 +45,13 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 	}
 
 	if !exists {
-		if rmErr := s.Client.Remove(ctx, pathNormalize(relPath)); rmErr != nil {
+		if rmErr := s.client.Remove(ctx, pathNormalize(relPath)); rmErr != nil {
 			return fmt.Errorf("c.Remove: %w", rmErr)
 		}
 
-		logutils.Printf("--- %s\n", relPath)
+		s.logger.Info(ctx, "Removed", logger.Fields{
+			"path": relPath,
+		})
 
 		return nil
 	}
@@ -58,20 +64,24 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 }
 
 func (s *Syncer) syncFile(ctx context.Context, absPath, relPath string) error {
-	if err := s.Client.UploadFile(ctx, pathNormalize(relPath), pathNormalize(absPath)); err != nil {
+	if err := s.client.UploadFile(ctx, pathNormalize(relPath), pathNormalize(absPath)); err != nil {
 		return fmt.Errorf("c.UploadFile: %w", err)
 	}
 
-	logutils.Printf("--> %s\n", relPath)
+	s.logger.Info(ctx, "Uploaded", logger.Fields{
+		"path": relPath,
+	})
 
 	return nil
 }
 
 func (s *Syncer) syncDir(ctx context.Context, absPath, relPath string) error {
-	if err := s.Client.MakeDir(ctx, pathNormalize(relPath)); err != nil {
+	if err := s.client.MakeDir(ctx, pathNormalize(relPath)); err != nil {
 		return fmt.Errorf("c.MakeDir: %w", err)
 	}
-	logutils.Printf("+++ %s\n", relPath)
+	s.logger.Info(ctx, "Created", logger.Fields{
+		"path": relPath,
+	})
 
 	files, err := os.ReadDir(absPath)
 	if err != nil {

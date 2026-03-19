@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+
+	logger "github.com/go-core-fx/cli-logger"
 )
 
 type Client interface {
@@ -16,14 +18,14 @@ type Client interface {
 	Remove(ctx context.Context, remotePath string) error
 }
 
-func New(address string) (Client, error) {
+func New(address string, log logger.Logger) (Client, error) {
 	u, err := url.Parse(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse URL: %w", err)
 	}
 
 	if u.Scheme == "ftp" {
-		return NewFtpClient(address), nil
+		return NewFtpClient(address, log.WithContext("client", "")), nil
 	}
 
 	return nil, fmt.Errorf("%w: %s", ErrUnsupportedScheme, u.Scheme)

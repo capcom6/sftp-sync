@@ -8,13 +8,15 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/capcom6/logutils"
 	"github.com/fsnotify/fsnotify"
+	logger "github.com/go-core-fx/cli-logger"
 )
 
 type Watcher struct {
 	rootPath string
 	excludes []string
+
+	logger logger.Logger
 
 	absRootPath string
 	absExcludes []string
@@ -22,10 +24,12 @@ type Watcher struct {
 	events      chan Event
 }
 
-func New(rootPath string, excludes []string) *Watcher {
+func New(rootPath string, excludes []string, logger logger.Logger) *Watcher {
 	return &Watcher{
 		rootPath: rootPath,
 		excludes: excludes,
+
+		logger: logger.WithContext("watcher", ""),
 
 		absRootPath: "",
 		absExcludes: nil,
@@ -91,16 +95,18 @@ func (w *Watcher) runWatcher(ctx context.Context) {
 				continue
 			}
 
-			logutils.Debug("event:", event)
+			w.logger.Debug(ctx, "Event received", logger.Fields{
+				"event": event,
+			})
 			if prErr := w.processEvent(ctx, event); prErr != nil {
-				logutils.Error(prErr)
+				w.logger.Error(ctx, "Failed to process event", prErr)
 			}
 
 		case watchErr, ok := <-w.fswatcher.Errors:
 			if !ok {
 				return
 			}
-			logutils.Error(watchErr)
+			w.logger.Error(ctx, "Watcher error", watchErr)
 		case <-ctx.Done():
 			return
 		}
