@@ -8,31 +8,30 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/capcom6/sftp-sync/internal/exclude"
 	"github.com/fsnotify/fsnotify"
 	logger "github.com/go-core-fx/cli-logger"
 )
 
 type Watcher struct {
 	rootPath string
-	excludes []string
+	matcher  *exclude.Matcher
 
 	logger logger.Logger
 
 	absRootPath string
-	absExcludes []string
 	fswatcher   *fsnotify.Watcher
 	events      chan Event
 }
 
-func New(rootPath string, excludes []string, logger logger.Logger) *Watcher {
+func New(rootPath string, matcher *exclude.Matcher, logger logger.Logger) *Watcher {
 	return &Watcher{
 		rootPath: rootPath,
-		excludes: excludes,
+		matcher:  matcher,
 
 		logger: logger.WithContext("watcher", ""),
 
 		absRootPath: "",
-		absExcludes: nil,
 		fswatcher:   nil,
 		events:      nil,
 	}
@@ -47,18 +46,13 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 		return nil, fmt.Errorf("prepareRoot: %w", err)
 	}
 
-	w.absExcludes = make([]string, 0, len(w.excludes))
-	for _, exclude := range w.excludes {
-		w.absExcludes = append(w.absExcludes, filepath.Join(w.absRootPath, exclude))
-	}
-
 	var err error
 	w.fswatcher, err = fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("fsnotify.NewWatcher: %w", err)
 	}
 
-	if addErr := w.addRecursive(w.absRootPath); addErr != nil {
+	if addErr := w.addRecursive(ctx, w.absRootPath); addErr != nil {
 		_ = w.fswatcher.Close()
 		w.fswatcher = nil
 		return nil, fmt.Errorf("addRecursive: %w", addErr)
@@ -80,7 +74,6 @@ func (w *Watcher) runWatcher(ctx context.Context) {
 		_ = w.fswatcher.Close()
 		close(w.events)
 		w.fswatcher = nil
-		w.absExcludes = nil
 		w.events = nil
 	}()
 
@@ -91,7 +84,7 @@ func (w *Watcher) runWatcher(ctx context.Context) {
 				return
 			}
 
-			if w.isExcluded(event.Name) {
+			if w.isExcluded(ctx, event.Name) {
 				continue
 			}
 
@@ -121,7 +114,7 @@ func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error
 		return nil
 	}
 
-	proceed, err := w.updateObservers(source)
+	proceed, err := w.updateObservers(ctx, source)
 	if err != nil {
 		return fmt.Errorf("updateObservers: %w", err)
 	}
@@ -169,7 +162,7 @@ func (w *Watcher) processEvent(ctx context.Context, source fsnotify.Event) error
 // When fsnotify.Write event is received, it skips recursive sync.
 // The function returns true if the event needs to be processed
 // further and false otherwise.
-func (w *Watcher) updateObservers(source fsnotify.Event) (bool, error) {
+func (w *Watcher) updateObservers(ctx context.Context, source fsnotify.Event) (bool, error) {
 	if source.Has(fsnotify.Remove) || source.Has(fsnotify.Rename) {
 		wl := w.fswatcher.WatchList()
 		for _, entry := range wl {
@@ -192,7 +185,7 @@ func (w *Watcher) updateObservers(source fsnotify.Event) (bool, error) {
 	}
 
 	if source.Op.Has(fsnotify.Create) {
-		if addErr := w.addRecursive(fullpath); addErr != nil {
+		if addErr := w.addRecursive(ctx, fullpath); addErr != nil {
 			return false, fmt.Errorf("addRecursive: %w", addErr)
 		}
 	} else if source.Op.Has(fsnotify.Write) {
@@ -231,8 +224,8 @@ func (w *Watcher) prepareRoot() error {
 	return nil
 }
 
-func (w *Watcher) addRecursive(path string) error {
-	if w.isExcluded(path) {
+func (w *Watcher) addRecursive(ctx context.Context, path string) error {
+	if w.isExcluded(ctx, path) {
 		return nil
 	}
 
@@ -252,7 +245,7 @@ func (w *Watcher) addRecursive(path string) error {
 		}
 
 		entryPath := filepath.Join(path, entry.Name())
-		if addErr := w.addRecursive(entryPath); addErr != nil {
+		if addErr := w.addRecursive(ctx, entryPath); addErr != nil {
 			return addErr
 		}
 	}
@@ -260,11 +253,18 @@ func (w *Watcher) addRecursive(path string) error {
 	return nil
 }
 
-func (w *Watcher) isExcluded(fullpath string) bool {
-	for _, exclude := range w.absExcludes {
-		if fullpath == exclude || strings.HasPrefix(fullpath, exclude+string(filepath.Separator)) {
-			return true
-		}
+func (w *Watcher) isExcluded(ctx context.Context, fullpath string) bool {
+	if w.matcher == nil {
+		return false
 	}
+
+	if matched, rule := w.matcher.MatchRule(fullpath); matched {
+		w.logger.Debug(ctx, "Excluded path skipped", logger.Fields{
+			"path": fullpath,
+			"rule": rule,
+		})
+		return true
+	}
+
 	return false
 }
