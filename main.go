@@ -80,7 +80,7 @@ func main() {
 			},
 			&cli.StringSliceFlag{
 				Name:  "exclude",
-				Usage: "paths or patterns to exclude from the synchronization process",
+				Usage: "paths or glob patterns to exclude (supports *, **, ?)",
 			},
 		},
 		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {

@@ -5,35 +5,32 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/capcom6/sftp-sync/internal/client"
+	"github.com/capcom6/sftp-sync/internal/exclude"
 	logger "github.com/go-core-fx/cli-logger"
 )
 
 type Syncer struct {
 	rootPath string
 	client   client.Client
+	matcher  *exclude.Matcher
 
 	logger logger.Logger
 }
 
-func New(rootPath string, client client.Client, logger logger.Logger) *Syncer {
+func New(rootPath string, client client.Client, matcher *exclude.Matcher, logger logger.Logger) *Syncer {
 	return &Syncer{
 		rootPath: rootPath,
 		client:   client,
+		matcher:  matcher,
 
 		logger: logger.WithContext("syncer", ""),
 	}
 }
 
 func (s *Syncer) Sync(ctx context.Context, absPath string) error {
-	exists, isDir, err := fsInfo(absPath)
-	if err != nil {
-		return fmt.Errorf("fsInfo: %w", err)
-	}
-
 	absRoot, err := filepath.Abs(s.rootPath)
 	if err != nil {
 		return fmt.Errorf("filepath.Abs: %w", err)
@@ -42,6 +39,19 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 	relPath, err := filepath.Rel(absRoot, absPath)
 	if err != nil {
 		return fmt.Errorf("filepath.Rel: %w", err)
+	}
+
+	if matched, rule := s.isExcluded(absPath); matched {
+		s.logger.Debug(ctx, "Excluded path skipped", logger.Fields{
+			"path": relPath,
+			"rule": rule,
+		})
+		return nil
+	}
+
+	exists, isDir, err := fsInfo(absPath)
+	if err != nil {
+		return fmt.Errorf("fsInfo: %w", err)
 	}
 
 	if !exists {
@@ -95,14 +105,25 @@ func (s *Syncer) syncDir(ctx context.Context, absPath, relPath string) error {
 		default:
 		}
 
+		childAbsPath := filepath.Join(absPath, file.Name())
+		childRelPath := filepath.Join(relPath, file.Name())
+		if matched, rule := s.isExcluded(childAbsPath); matched {
+			s.logger.Debug(ctx, "Excluded path skipped", logger.Fields{
+				"path": childRelPath,
+				"rule": rule,
+			})
+			continue
+		}
+
 		if file.IsDir() {
-			if dErr := s.syncDir(ctx, path.Join(absPath, file.Name()), path.Join(relPath, file.Name())); dErr != nil {
+			if dErr := s.syncDir(ctx, childAbsPath, childRelPath); dErr != nil {
 				return dErr
 			}
-		} else {
-			if fErr := s.syncFile(ctx, path.Join(absPath, file.Name()), path.Join(relPath, file.Name())); fErr != nil {
-				return fErr
-			}
+			continue
+		}
+
+		if fErr := s.syncFile(ctx, childAbsPath, childRelPath); fErr != nil {
+			return fErr
 		}
 	}
 
@@ -123,4 +144,12 @@ func fsInfo(path string) (bool, bool, error) {
 
 func pathNormalize(path string) string {
 	return filepath.ToSlash(path)
+}
+
+func (s *Syncer) isExcluded(absPath string) (bool, string) {
+	if s.matcher == nil {
+		return false, ""
+	}
+
+	return s.matcher.MatchRule(absPath)
 }

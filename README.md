@@ -170,7 +170,7 @@ sftp-sync --dest=ftp://username:password@hostname:port/path/to/remote/folder \
 ### Sync Command Options
 
 - `--dest`: The destination FTP server URL. It should follow the format `ftp://username:password@hostname:port/path/to/remote/folder`.
-- `--exclude`: (Optional) Specifies paths or patterns to exclude from the synchronization process. You can specify multiple `--exclude` options to exclude multiple paths or patterns.
+- `--exclude`: (Optional) Specifies paths or glob patterns to exclude from synchronization. Supports `*`, `**`, and `?`. You can specify multiple `--exclude` options.
 
 ### Sync Command Arguments
 
@@ -195,7 +195,7 @@ The application uses structured error handling with specific exit codes:
 <!-- ROADMAP -->
 ## Roadmap
 
-- [ ] Support for patterns in the `--exclude` option.
+- [x] Support for patterns in the `--exclude` option.
 - [ ] Support of Secure FTP (SFTP) protocol.
 - [ ] Improved error handling and error messages.
 - [ ] Integration with Git for automatic syncing on commit or branch changes.

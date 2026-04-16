@@ -6,6 +6,7 @@ import (
 
 	"github.com/capcom6/sftp-sync/internal/cli/codes"
 	"github.com/capcom6/sftp-sync/internal/client"
+	"github.com/capcom6/sftp-sync/internal/exclude"
 	"github.com/capcom6/sftp-sync/internal/syncer"
 	"github.com/capcom6/sftp-sync/internal/watcher"
 	logger "github.com/go-core-fx/cli-logger"
@@ -33,7 +34,7 @@ func Command() *cli.Command {
 			},
 			&cli.StringSliceFlag{
 				Name:  "exclude",
-				Usage: "paths or patterns to exclude from the synchronization process",
+				Usage: "paths or glob patterns to exclude (supports *, **, ?)",
 			},
 		},
 		ArgsUsage: "[source]",
@@ -73,8 +74,14 @@ func Action(ctx context.Context, cmd *cli.Command) error {
 		return cli.Exit(err.Error(), codes.ClientError)
 	}
 
-	watcher := watcher.New(cfg.Source, cfg.Excludes, log)
-	syncer := syncer.New(cfg.Source, remote, log)
+	excludeMatcher, err := exclude.New(cfg.Excludes, cfg.Source)
+	if err != nil {
+		log.Error(ctx, "Failed to build exclude matcher", err)
+		return cli.Exit(err.Error(), codes.ParamsError)
+	}
+
+	watcher := watcher.New(cfg.Source, excludeMatcher, log)
+	syncer := syncer.New(cfg.Source, remote, excludeMatcher, log)
 
 	var wg sync.WaitGroup
 
