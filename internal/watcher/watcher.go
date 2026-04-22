@@ -240,6 +240,12 @@ func (w *Watcher) addRecursive(ctx context.Context, path string) error {
 	}
 
 	for _, entry := range entries {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
 		if !entry.IsDir() {
 			continue
 		}
