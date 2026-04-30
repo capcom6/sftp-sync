@@ -12,6 +12,10 @@ import (
 	logger "github.com/go-core-fx/cli-logger"
 )
 
+const (
+	fieldPath = "path"
+)
+
 type Syncer struct {
 	rootPath string
 	client   client.Client
@@ -43,8 +47,8 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 
 	if matched, rule := s.isExcluded(absPath); matched {
 		s.logger.Debug(ctx, "Excluded path skipped", logger.Fields{
-			"path": relPath,
-			"rule": rule,
+			fieldPath: relPath,
+			"rule":    rule,
 		})
 		return nil
 	}
@@ -60,7 +64,7 @@ func (s *Syncer) Sync(ctx context.Context, absPath string) error {
 		}
 
 		s.logger.Info(ctx, "Removed", logger.Fields{
-			"path": relPath,
+			fieldPath: relPath,
 		})
 
 		return nil
@@ -78,9 +82,13 @@ func (s *Syncer) syncFile(ctx context.Context, absPath, relPath string) error {
 		return fmt.Errorf("c.UploadFile: %w", err)
 	}
 
-	s.logger.Info(ctx, "Uploaded", logger.Fields{
-		"path": relPath,
-	})
+	fields := logger.Fields{
+		fieldPath: relPath,
+	}
+	if info, err := os.Stat(absPath); err == nil {
+		fields["size"] = info.Size()
+	}
+	s.logger.Info(ctx, "Uploaded", fields)
 
 	return nil
 }
@@ -90,7 +98,7 @@ func (s *Syncer) syncDir(ctx context.Context, absPath, relPath string) error {
 		return fmt.Errorf("c.MakeDir: %w", err)
 	}
 	s.logger.Info(ctx, "Created", logger.Fields{
-		"path": relPath,
+		fieldPath: relPath,
 	})
 
 	files, err := os.ReadDir(absPath)
@@ -109,8 +117,8 @@ func (s *Syncer) syncDir(ctx context.Context, absPath, relPath string) error {
 		childRelPath := filepath.Join(relPath, file.Name())
 		if matched, rule := s.isExcluded(childAbsPath); matched {
 			s.logger.Debug(ctx, "Excluded path skipped", logger.Fields{
-				"path": childRelPath,
-				"rule": rule,
+				fieldPath: childRelPath,
+				"rule":    rule,
 			})
 			continue
 		}

@@ -6,6 +6,7 @@ type config struct {
 	Source   string
 	Dest     string
 	Excludes []string
+	DryRun   bool
 }
 
 func (c config) validate() error {
@@ -25,11 +26,13 @@ func parseConfig(cmd *cli.Command) (config, error) {
 		Source:   "",
 		Dest:     "",
 		Excludes: nil,
+		DryRun:   false,
 	}
 
 	cfg.Source = cmd.StringArg("source")
 	cfg.Dest = cmd.String("dest")
 	cfg.Excludes = cmd.StringSlice("exclude")
+	cfg.DryRun = cmd.Bool("dry-run")
 
 	return cfg, cfg.validate()
 }

@@ -36,6 +36,10 @@ func Command() *cli.Command {
 				Name:  "exclude",
 				Usage: "paths or glob patterns to exclude (supports *, **, ?)",
 			},
+			&cli.BoolFlag{
+				Name:  "dry-run",
+				Usage: "perform a dry run without actually syncing files",
+			},
 		},
 		ArgsUsage: "[source]",
 		Before:    Before,
@@ -103,7 +107,9 @@ func Action(ctx context.Context, cmd *cli.Command) error {
 					return
 				}
 				log.Debug(ctx, "Event received", logger.Fields{"event": event})
-				if syncErr := syncer.Sync(ctx, event.AbsPath); syncErr != nil {
+				if cfg.DryRun {
+					dryRunLog(ctx, event)
+				} else if syncErr := syncer.Sync(ctx, event.AbsPath); syncErr != nil {
 					log.Error(ctx, "Failed to sync", syncErr)
 				}
 			case <-ctx.Done():
@@ -118,4 +124,22 @@ func Action(ctx context.Context, cmd *cli.Command) error {
 
 	log.Info(ctx, "Sync command completed")
 	return nil
+}
+
+func dryRunLog(ctx context.Context, event watcher.Event) {
+	log := logger.GetLogger(ctx)
+
+	var action string
+	switch event.Type {
+	case watcher.EventCreated:
+		action = "create"
+	case watcher.EventModified:
+		action = "modify"
+	case watcher.EventRemoved:
+		action = "remove"
+	default:
+		return
+	}
+
+	log.Info(ctx, "Would "+action, logger.Fields{"path": event.RelPath})
 }
