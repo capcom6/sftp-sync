@@ -82,6 +82,10 @@ func main() {
 				Name:  "exclude",
 				Usage: "paths or glob patterns to exclude (supports *, **, ?)",
 			},
+			&cli.BoolFlag{
+				Name:  "dry-run",
+				Usage: "perform a dry run without actually syncing files",
+			},
 		},
 		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 			if cmd.Bool("debug") {
