@@ -40,7 +40,7 @@
 <h3 align="center">sftp-sync</h3>
 
   <p align="center">
-    A command-line utility for syncing a local folder with a remote FTP server on every change of files or directories.
+    A command-line utility for syncing a local folder with a remote FTP or SFTP server on every change of files or directories.
     <br />
     <br />
     <a href="https://github.com/capcom6/sftp-sync/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
@@ -78,13 +78,14 @@
 
 <!-- [![Product Name Screen Shot][product-screenshot]](https://example.com) -->
 
-sftp-sync is a command-line utility for syncing a local folder with a remote FTP server on every change of files or directories.
+sftp-sync is a command-line utility for syncing a local folder with a remote FTP or SFTP server on every change of files or directories.
 
 ### Features
 
-- Continuous synchronization: Automatically syncs local changes to the remote FTP server whenever files or directories are added, modified, or deleted.
+- Continuous synchronization: Automatically syncs local changes to the remote FTP or SFTP server whenever files or directories are added, modified, or deleted.
 - Exclude paths: Allows you to exclude specific paths from being synced.
 - Easy to use: Simple and intuitive command-line interface.
+- Protocol support: Supports both FTP and SFTP (SSH File Transfer Protocol).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -104,8 +105,8 @@ sftp-sync is a command-line utility for syncing a local folder with a remote FTP
 
 ### Prerequisites
 
-- Go 1.24.3 or higher installed on your system
-- Access to an FTP server with valid credentials
+- Go 1.25.0 or higher installed on your system
+- Access to an (S)FTP server with valid credentials
 
 ### Installation Methods
 
@@ -153,10 +154,31 @@ The binary will be available in the `bin/` directory.
 ## Usage
 Run the `sftp-sync` command with the necessary options and arguments:
 
+**FTP:**
 ```shell
 sftp-sync --dest=ftp://username:password@hostname:port/path/to/remote/folder \
   --exclude=.git /path/to/local/folder
 ```
+
+**SFTP (password):**
+```shell
+sftp-sync --dest=sftp://username:password@hostname:22/path/to/remote/folder \
+  --exclude=.git /path/to/local/folder
+```
+
+**SFTP (SSH key):**
+```shell
+sftp-sync --dest="sftp://username@hostname:22/path/to/remote/folder?key=~/.ssh/id_ed25519" \
+  --exclude=.git /path/to/local/folder
+```
+
+**SFTP (SSH agent):**
+```shell
+sftp-sync --dest="sftp://username@hostname:22/path/to/remote/folder?agent=true" \
+  --exclude=.git /path/to/local/folder
+```
+
+> **Note:** SFTP uses SSH port 22 by default (vs FTP port 21).
 
 ### Environment Variables
 
@@ -169,7 +191,28 @@ sftp-sync --dest=ftp://username:password@hostname:port/path/to/remote/folder \
 
 ### Sync Command Options
 
-- `--dest`: The destination FTP server URL. It should follow the format `ftp://username:password@hostname:port/path/to/remote/folder`.
+- `--dest`: The destination server URL. Supports both FTP and SFTP:
+  - FTP: `ftp://username:password@hostname:port/path/to/remote/folder`
+  - SFTP (password): `sftp://username:password@hostname:22/path/to/remote/folder`
+  - SFTP (SSH key): `sftp://username@hostname:22/path?key=~/.ssh/id_ed25519`
+  - SFTP (SSH key with passphrase): `sftp://username@hostname:22/path?key=~/.ssh/id_ed25519&key_pass=<passphrase>`
+  - SFTP (SSH agent): `sftp://username@hostname:22/path?agent=true`
+
+The URL path (e.g., `/path/to/remote/folder`) is used as the remote destination prefix. All synced files and directories are placed relative to this path. **The remote directory must already exist** before starting the sync.
+
+SFTP URL query parameters:
+
+| Parameter  | Description                                                                                                                             | Example                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `key`      | Path to SSH private key file (supports `~` expansion). If omitted, auto-detects `~/.ssh/id_ed25519`, `~/.ssh/id_ecdsa`, `~/.ssh/id_rsa` | `key=~/.ssh/custom_key` |
+| `key_pass` | Passphrase for encrypted private keys                                                                                                   | `key_pass=mysecret`     |
+| `agent`    | Use SSH agent for authentication when set to `true`                                                                                     | `agent=true`            |
+
+Authentication methods are tried in order: SSH agent → private key → password.
+
+> **Security note:** Avoid putting real passwords/passphrases directly in CLI arguments when possible,
+> as they can be exposed via shell history and process listings.
+
 - `--exclude`: (Optional) Specifies paths or glob patterns to exclude from synchronization. Supports `*`, `**`, and `?`. You can specify multiple `--exclude` options.
 
 ### Sync Command Arguments
@@ -196,7 +239,7 @@ The application uses structured error handling with specific exit codes:
 ## Roadmap
 
 - [x] Support for patterns in the `--exclude` option.
-- [ ] Support of Secure FTP (SFTP) protocol.
+- [x] Support of Secure FTP (SFTP) protocol.
 - [ ] Improved error handling and error messages.
 - [ ] Integration with Git for automatic syncing on commit or branch changes.
 - [ ] Integration with Git for linking branch to remote server.

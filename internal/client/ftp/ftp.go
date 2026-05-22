@@ -1,8 +1,9 @@
-package client
+package ftp
 
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/textproto"
 	"net/url"
 	"os"
@@ -10,12 +11,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/capcom6/sftp-sync/internal/client/types"
 	logger "github.com/go-core-fx/cli-logger"
 	"github.com/jlaffaye/ftp"
 	"github.com/samber/lo"
 )
 
-type FtpClient struct {
+type Client struct {
 	url string
 
 	logger logger.Logger
@@ -24,8 +26,8 @@ type FtpClient struct {
 	lock   sync.Mutex
 }
 
-func NewFtpClient(url string, logger logger.Logger) *FtpClient {
-	return &FtpClient{
+func NewClient(url string, logger logger.Logger) *Client {
+	return &Client{
 		url: url,
 
 		logger: logger,
@@ -35,7 +37,7 @@ func NewFtpClient(url string, logger logger.Logger) *FtpClient {
 	}
 }
 
-func (c *FtpClient) init(ctx context.Context) error {
+func (c *Client) init(ctx context.Context) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -59,33 +61,50 @@ func (c *FtpClient) init(ctx context.Context) error {
 	}
 
 	if u.Scheme != "ftp" {
-		return fmt.Errorf("%w: %s", ErrUnsupportedScheme, u.Scheme)
+		return fmt.Errorf("%w: %s", types.ErrUnsupportedScheme, u.Scheme)
 	}
 
-	c.client, err = ftp.Dial(u.Host, ftp.DialWithContext(ctx))
+	host := u.Host
+	if u.Port() == "" {
+		host = net.JoinHostPort(u.Hostname(), "21")
+	}
+
+	conn, err := ftp.Dial(host, ftp.DialWithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("can't connect to %s: %w", u.Host, err)
 	}
 
-	password, ok := u.User.Password()
-	if !ok {
-		password = ""
+	user := u.User
+	if user == nil || user.Username() == "" {
+		_ = conn.Quit()
+		return fmt.Errorf("%w: missing FTP username in URL", types.ErrInvalidParams)
+	}
+	password, _ := user.Password()
+	if loginErr := conn.Login(user.Username(), password); loginErr != nil {
+		_ = conn.Quit()
+		return fmt.Errorf("can't login as %s: %w", user.Username(), loginErr)
 	}
 
-	if loginErr := c.client.Login(u.User.Username(), password); loginErr != nil {
-		return fmt.Errorf("can't login as %s: %w", u.User.Username(), loginErr)
+	if u.Path != "" && u.Path != "/" {
+		if chErr := conn.ChangeDir(u.Path); chErr != nil {
+			_ = conn.Quit()
+			return fmt.Errorf(
+				"%w: remote path %s does not exist or is not accessible: %w",
+				types.ErrInvalidPath,
+				u.Path,
+				chErr,
+			)
+		}
 	}
 
-	if chErr := c.client.ChangeDir(u.Path); chErr != nil {
-		return fmt.Errorf("can't change directory to %s: %w", u.Path, chErr)
-	}
+	c.client = conn
 
 	return nil
 }
 
-func (c *FtpClient) ping(_ context.Context) error {
+func (c *Client) ping(_ context.Context) error {
 	if c.client == nil {
-		return ErrClientIsNil
+		return types.ErrClientIsNil
 	}
 
 	if err := c.client.NoOp(); err != nil {
@@ -95,7 +114,7 @@ func (c *FtpClient) ping(_ context.Context) error {
 	return nil
 }
 
-func (c *FtpClient) MakeDir(ctx context.Context, remotePath string) error {
+func (c *Client) MakeDir(ctx context.Context, remotePath string) error {
 	if err := c.init(ctx); err != nil {
 		return err
 	}
@@ -117,7 +136,7 @@ func (c *FtpClient) MakeDir(ctx context.Context, remotePath string) error {
 	return nil
 }
 
-func (c *FtpClient) RemoveDir(ctx context.Context, remotePath string) error {
+func (c *Client) RemoveDir(ctx context.Context, remotePath string) error {
 	if err := c.init(ctx); err != nil {
 		return err
 	}
@@ -133,7 +152,7 @@ func (c *FtpClient) RemoveDir(ctx context.Context, remotePath string) error {
 	return nil
 }
 
-func (c *FtpClient) UploadFile(ctx context.Context, remotePath string, localPath string) error {
+func (c *Client) UploadFile(ctx context.Context, remotePath string, localPath string) error {
 	if err := c.init(ctx); err != nil {
 		return err
 	}
@@ -156,7 +175,7 @@ func (c *FtpClient) UploadFile(ctx context.Context, remotePath string, localPath
 	return nil
 }
 
-func (c *FtpClient) RemoveFile(ctx context.Context, remotePath string) error {
+func (c *Client) RemoveFile(ctx context.Context, remotePath string) error {
 	if err := c.init(ctx); err != nil {
 		return err
 	}
@@ -169,7 +188,7 @@ func (c *FtpClient) RemoveFile(ctx context.Context, remotePath string) error {
 	return nil
 }
 
-func (c *FtpClient) Remove(ctx context.Context, remotePath string) error {
+func (c *Client) Remove(ctx context.Context, remotePath string) error {
 	if err := c.init(ctx); err != nil {
 		return err
 	}
