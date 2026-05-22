@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/capcom6/sftp-sync/internal/client/ftp"
+	"github.com/capcom6/sftp-sync/internal/client/sftp"
+	"github.com/capcom6/sftp-sync/internal/client/types"
 	logger "github.com/go-core-fx/cli-logger"
 )
 
@@ -24,9 +27,12 @@ func New(address string, log logger.Logger) (Client, error) {
 		return nil, fmt.Errorf("failed to parse URL: %w", err)
 	}
 
-	if u.Scheme == "ftp" {
-		return NewFtpClient(address, log.WithContext("client", "")), nil
+	switch u.Scheme {
+	case "ftp":
+		return ftp.NewClient(address, log.WithContext("ftp", "")), nil
+	case "sftp":
+		return sftp.NewClient(address, log.WithContext("sftp", "")), nil
 	}
 
-	return nil, fmt.Errorf("%w: %s", ErrUnsupportedScheme, u.Scheme)
+	return nil, fmt.Errorf("%w: %s (supported: ftp, sftp)", types.ErrUnsupportedScheme, u.Scheme)
 }

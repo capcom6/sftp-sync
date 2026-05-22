@@ -54,7 +54,7 @@ func main() {
 
 	app := &cli.Command{
 		Name:      "sftp-sync",
-		Usage:     "a command-line utility for syncing a local folder with a remote FTP server on every change of files or directories.",
+		Usage:     "a command-line utility for syncing a local folder with a remote FTP or SFTP server on every change of files or directories.",
 		Version:   appVersion,
 		ArgsUsage: "[source]",
 		Arguments: []cli.Argument{
@@ -75,7 +75,7 @@ func main() {
 
 			&cli.StringFlag{
 				Name:     "dest",
-				Usage:    "destination FTP server URL",
+				Usage:    "destination FTP/SFTP server URL (e.g., ftp://user:pass@host/path or sftp://user:pass@host:22/path)",
 				Required: true,
 			},
 			&cli.StringSliceFlag{

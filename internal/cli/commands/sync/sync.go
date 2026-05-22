@@ -16,7 +16,7 @@ import (
 func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "sync",
-		Usage: "watch a local folder for changes and sync them to a remote FTP server.",
+		Usage: "watch a local folder for changes and sync them to a remote FTP or SFTP server.",
 		Arguments: []cli.Argument{
 			&cli.StringArg{
 				Name:      "source",
@@ -29,7 +29,7 @@ func Command() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "dest",
-				Usage:    "destination FTP server URL",
+				Usage:    "destination FTP/SFTP server URL (e.g., ftp://user:pass@host/path or sftp://user:pass@host:22/path)",
 				Required: true,
 			},
 			&cli.StringSliceFlag{
