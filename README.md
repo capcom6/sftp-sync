@@ -62,11 +62,13 @@
     - [Method 2: Using Release Binaries](#method-2-using-release-binaries)
     - [Method 3: Building from Source](#method-3-building-from-source)
 - [Usage](#usage)
-  - [Environment Variables](#environment-variables)
   - [Global Options](#global-options)
-  - [Sync Command Options](#sync-command-options)
-  - [Sync Command Arguments](#sync-command-arguments)
+  - [Options](#options)
+  - [Arguments](#arguments)
   - [Error Handling](#error-handling)
+- [Configuration](#configuration)
+  - [Environment Variables](#environment-variables)
+  - [The `.env` File](#the-env-file)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
@@ -82,10 +84,13 @@ sftp-sync is a command-line utility for syncing a local folder with a remote FTP
 
 ### Features
 
-- Continuous synchronization: Automatically syncs local changes to the remote FTP or SFTP server whenever files or directories are added, modified, or deleted.
-- Exclude paths: Allows you to exclude specific paths from being synced.
+- Continuous synchronization: Automatically syncs local changes to the remote FTP or SFTP server whenever files or directories are added, modified, or deleted, including recursive changes in subdirectories.
+- Exclude paths: Allows you to exclude specific paths from being synced, with support for glob patterns (`*`, `**`, `?`).
+- Dry run mode: Preview what would be created, modified, or removed without uploading anything (`--dry-run`).
 - Easy to use: Simple and intuitive command-line interface.
 - Protocol support: Supports both FTP and SFTP (SSH File Transfer Protocol).
+- Flexible SFTP authentication: Password, SSH private key (optionally passphrase-protected), or SSH agent.
+- Graceful shutdown: Stops cleanly on `Ctrl+C` (SIGINT) or `SIGTERM`, including during a recursive sync.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -94,6 +99,9 @@ sftp-sync is a command-line utility for syncing a local folder with a remote FTP
 * [![Go][Go.dev]][Go-url]
 * [![urfave/cli][urfave-cli-v3]][urfave-cli-v3-url]
 * [![fsnotify][fsnotify]][fsnotify-url]
+* [![jlaffaye/ftp][jlaffaye-ftp]][jlaffaye-ftp-url]
+* [![pkg/sftp][pkg-sftp]][pkg-sftp-url]
+* [![bmatcuk/doublestar][doublestar]][doublestar-url]
 * [![joho/godotenv][godotenv]][godotenv-url]
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -105,7 +113,7 @@ sftp-sync is a command-line utility for syncing a local folder with a remote FTP
 
 ### Prerequisites
 
-- Go 1.25.0 or higher installed on your system
+- Go 1.26.0 or higher installed on your system
 - Access to an (S)FTP server with valid credentials
 
 ### Installation Methods
@@ -178,18 +186,20 @@ sftp-sync --dest="sftp://username@hostname:22/path/to/remote/folder?agent=true" 
   --exclude=.git /path/to/local/folder
 ```
 
+**Dry run (preview without uploading):**
+```shell
+sftp-sync --dry-run --dest=ftp://username:password@hostname:port/path/to/remote/folder \
+  --exclude=.git /path/to/local/folder
+```
+
 > **Note:** SFTP uses SSH port 22 by default (vs FTP port 21).
-
-### Environment Variables
-
-- `DEBUG`: When set to any value, enables debug mode (equivalent to `--debug` flag).
 
 ### Global Options
 
 - `--debug`: Enable debug mode (can also be set via `DEBUG` environment variable).
 - `--version`: Print version information.
 
-### Sync Command Options
+### Options
 
 - `--dest`: The destination server URL. Supports both FTP and SFTP:
   - FTP: `ftp://username:password@hostname:port/path/to/remote/folder`
@@ -202,20 +212,22 @@ The URL path (e.g., `/path/to/remote/folder`) is used as the remote destination 
 
 SFTP URL query parameters:
 
-| Parameter  | Description                                                                                                                             | Example                 |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `key`      | Path to SSH private key file (supports `~` expansion). If omitted, auto-detects `~/.ssh/id_ed25519`, `~/.ssh/id_ecdsa`, `~/.ssh/id_rsa` | `key=~/.ssh/custom_key` |
-| `key_pass` | Passphrase for encrypted private keys                                                                                                   | `key_pass=mysecret`     |
-| `agent`    | Use SSH agent for authentication when set to `true`                                                                                     | `agent=true`            |
+| Parameter  | Description                                                                                                                                                   | Example                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `key`      | Path to SSH private key file (supports `~` expansion). If omitted, auto-detects a default key only when no password is set and agent auth provides no signers | `key=~/.ssh/custom_key` |
+| `key_pass` | Passphrase for encrypted private keys                                                                                                                         | `key_pass=mysecret`     |
+| `agent`    | Use SSH agent for authentication when set to `true` (requires `SSH_AUTH_SOCK`)                                                                                | `agent=true`            |
+| `timeout`  | Connection timeout as a Go duration (e.g., `30s`, `1m`)                                                                                                       | `timeout=45s`           |
 
-Authentication methods are tried in order: SSH agent → private key → password.
+Authentication methods are tried in order: SSH agent → private key → password. If agent setup fails, the error is returned instead of falling back to a default key. SFTP host keys are verified against `~/.ssh/known_hosts`.
 
 > **Security note:** Avoid putting real passwords/passphrases directly in CLI arguments when possible,
 > as they can be exposed via shell history and process listings.
 
 - `--exclude`: (Optional) Specifies paths or glob patterns to exclude from synchronization. Supports `*`, `**`, and `?`. You can specify multiple `--exclude` options.
+- `--dry-run`: (Optional) Log what would be created, modified, or removed without uploading or deleting anything on the remote server.
 
-### Sync Command Arguments
+### Arguments
 
 - `source`: The local folder path to watch for changes (required positional argument).
 
@@ -225,11 +237,39 @@ Authentication methods are tried in order: SSH agent → private key → passwor
 
 The application uses structured error handling with specific exit codes:
 
-- `0`: Success - operation completed successfully
-- `1`: Parameters Error - invalid command arguments or options
-- `2`: Client Error - FTP client connection or operation failed
-- `3`: Output Error - logging or output system failed
-- `4`: Internal Error - unexpected internal error
+- `0`: Success - operation completed successfully, including an interrupted sync stopped with `Ctrl+C`
+- `1`: Parameters Error - invalid positional arguments (missing or extra `source`), or an empty `--dest`
+- `2`: Client Error - the destination URL could not be parsed or uses an unsupported scheme (only `ftp` and `sftp` are supported)
+- `3`: Output Error - reserved for logging or output system failures
+- `4`: Internal Error - unexpected internal errors, including flag errors reported by the CLI framework (e.g., a missing required `--dest` or an unknown flag)
+
+Failures that occur **while syncing** (for example, the remote server is unreachable) are logged and the watcher keeps running; the process does not exit.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- CONFIGURATION -->
+## Configuration
+
+### Environment Variables
+
+| Variable        | Purpose                                                                                                             | Format                                                                                                     | Default                       | Example                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------- |
+| `DEBUG`         | Enables debug logging (equivalent to the `--debug` flag).                                                           | Boolean accepted by Go's `strconv.ParseBool`: `1`, `t`, `T`, `true`, `TRUE`, `True`. `0`/`false` disables. | unset (disabled)              | `DEBUG=1`                    |
+| `SSH_AUTH_SOCK` | Path to the SSH agent socket. Read-only — provided by `ssh-agent`; used when the destination URL has `?agent=true`. | Unix socket path                                                                                           | set by the system/`ssh-agent` | `/tmp/ssh-XXXXXX/agent.1234` |
+
+> **Note:** an unparseable `DEBUG` value (e.g. `DEBUG=yes`) makes the command fail at startup with exit code `4`.
+
+### The `.env` File
+
+On startup the application loads environment variables from a `.env` file in the current working directory (via [godotenv](https://github.com/joho/godotenv)); a missing file is ignored. This is a convenient way to set `DEBUG` without typing it on every run:
+
+```dotenv
+DEBUG=1
+```
+
+See [.env.example](.env.example) for a documented template.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -322,6 +362,12 @@ Project Link: [https://github.com/capcom6/sftp-sync](https://github.com/capcom6/
 [fsnotify-url]: https://github.com/fsnotify/fsnotify
 [godotenv]: https://img.shields.io/badge/joho%2Fgodotenv-00ADD8?style=for-the-badge&logo=go&logoColor=white
 [godotenv-url]: https://github.com/joho/godotenv
+[jlaffaye-ftp]: https://img.shields.io/badge/jlaffaye%2Fftp-00ADD8?style=for-the-badge&logo=go&logoColor=white
+[jlaffaye-ftp-url]: https://github.com/jlaffaye/ftp
+[pkg-sftp]: https://img.shields.io/badge/pkg%2Fsftp-00ADD8?style=for-the-badge&logo=go&logoColor=white
+[pkg-sftp-url]: https://github.com/pkg/sftp
+[doublestar]: https://img.shields.io/badge/bmatcuk%2Fdoublestar-00ADD8?style=for-the-badge&logo=go&logoColor=white
+[doublestar-url]: https://github.com/bmatcuk/doublestar
 [go-report-card-shield]: https://goreportcard.com/badge/github.com/capcom6/sftp-sync
 [go-report-card-url]: https://goreportcard.com/report/github.com/capcom6/sftp-sync
 [go-version-shield]: https://img.shields.io/github/go-mod/go-version/capcom6/sftp-sync?style=for-the-badge
