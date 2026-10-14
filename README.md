@@ -85,6 +85,7 @@ sftp-sync is a command-line utility for syncing a local folder with a remote FTP
 ### Features
 
 - Continuous synchronization: Automatically syncs local changes to the remote FTP or SFTP server whenever files or directories are added, modified, or deleted, including recursive changes in subdirectories.
+- Initial sync: Optionally mirrors the whole local folder to the remote once at startup before watching for changes (`--initial-sync`), so the remote is complete from the first run instead of only tracking changes made after launch.
 - Exclude paths: Allows you to exclude specific paths from being synced, with support for glob patterns (`*`, `**`, `?`).
 - Dry run mode: Preview what would be created, modified, or removed without uploading anything (`--dry-run`).
 - Easy to use: Simple and intuitive command-line interface.
@@ -192,6 +193,12 @@ sftp-sync --dry-run --dest=ftp://username:password@hostname:port/path/to/remote/
   --exclude=.git /path/to/local/folder
 ```
 
+**Initial sync (upload the whole folder once, then watch):**
+```shell
+sftp-sync --initial-sync --dest=sftp://username@hostname:22/path/to/remote/folder \
+  --exclude=.git /path/to/local/folder
+```
+
 > **Note:** SFTP uses SSH port 22 by default (vs FTP port 21).
 
 ### Global Options
@@ -226,6 +233,13 @@ Authentication methods are tried in order: SSH agent → private key → passwor
 
 - `--exclude`: (Optional) Specifies paths or glob patterns to exclude from synchronization. Supports `*`, `**`, and `?`. You can specify multiple `--exclude` options.
 - `--dry-run`: (Optional) Log what would be created, modified, or removed without uploading or deleting anything on the remote server.
+- `--initial-sync`: (Optional) Mirror the whole local folder to the remote once at startup, before watching for changes. Excluded paths are honored.
+
+> **Note:** `--initial-sync` only creates and uploads files present in the local folder; it never deletes
+> remote-only files. Changes made to the local folder *during* the initial pass may be missed until the
+> watcher starts — keep the pass short for large trees. Combine with `--dry-run` to preview the initial
+> sync without contacting the remote. If the initial sync fails (e.g. the remote is unreachable), the error
+> is logged and the tool continues to watch for changes.
 
 ### Arguments
 
