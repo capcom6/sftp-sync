@@ -3,10 +3,11 @@ package sync
 import "github.com/urfave/cli/v3"
 
 type config struct {
-	Source   string
-	Dest     string
-	Excludes []string
-	DryRun   bool
+	Source      string
+	Dest        string
+	Excludes    []string
+	DryRun      bool
+	InitialSync bool
 }
 
 func (c config) validate() error {
@@ -23,16 +24,18 @@ func (c config) validate() error {
 
 func parseConfig(cmd *cli.Command) (config, error) {
 	cfg := config{
-		Source:   "",
-		Dest:     "",
-		Excludes: nil,
-		DryRun:   false,
+		Source:      "",
+		Dest:        "",
+		Excludes:    nil,
+		DryRun:      false,
+		InitialSync: false,
 	}
 
 	cfg.Source = cmd.StringArg("source")
 	cfg.Dest = cmd.String("dest")
 	cfg.Excludes = cmd.StringSlice("exclude")
 	cfg.DryRun = cmd.Bool("dry-run")
+	cfg.InitialSync = cmd.Bool("initial-sync")
 
 	return cfg, cfg.validate()
 }

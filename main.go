@@ -86,6 +86,10 @@ func main() {
 				Name:  "dry-run",
 				Usage: "perform a dry run without actually syncing files",
 			},
+			&cli.BoolFlag{
+				Name:  "initial-sync",
+				Usage: "sync the whole local folder to the remote before starting to watch for changes",
+			},
 		},
 		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 			if cmd.Bool("debug") {

@@ -6,6 +6,20 @@ Entries follow the release history from newest to oldest. Dates are release (tag
 
 ## [Unreleased]
 
+### New Features
+
+#### Initial Sync
+
+- **Initial sync** — new `--initial-sync` flag mirrors the whole local folder to the remote once at startup, before watching for changes:
+  ```bash
+  sftp-sync --initial-sync --dest=sftp://username@hostname:22/remote/path --exclude=.git /local/path
+  ```
+  - Creates directories and uploads files for every path already present in the source folder, honoring `--exclude` rules.
+  - Does not delete remote-only files — it only adds/overwrites what exists locally.
+  - Combine with `--dry-run` to preview the initial sync (`Would create` / `Would upload`) without contacting the remote.
+  - If the initial sync fails (e.g. unreachable server), the error is logged and the tool continues watching for changes.
+  - Changes made to the source folder during the initial pass may be missed until the watcher starts.
+
 ### Maintenance
 
 - **Minimum Go version raised to 1.26.0** — building from source now requires Go 1.26.0 or newer (`go.mod` updated from 1.25.0).
