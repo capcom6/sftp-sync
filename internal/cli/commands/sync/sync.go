@@ -40,6 +40,10 @@ func Command() *cli.Command {
 				Name:  "dry-run",
 				Usage: "perform a dry run without actually syncing files",
 			},
+			&cli.BoolFlag{
+				Name:  "initial-sync",
+				Usage: "sync the whole local folder to the remote before starting to watch for changes",
+			},
 		},
 		ArgsUsage: "[source]",
 		Before:    Before,
@@ -87,6 +91,10 @@ func Action(ctx context.Context, cmd *cli.Command) error {
 	watcher := watcher.New(cfg.Source, excludeMatcher, log)
 	syncer := syncer.New(cfg.Source, remote, excludeMatcher, log)
 
+	if cfg.InitialSync {
+		runInitialSync(ctx, log, syncer, cfg.DryRun)
+	}
+
 	var wg sync.WaitGroup
 
 	ch, err := watcher.Watch(ctx, &wg)
@@ -95,10 +103,7 @@ func Action(ctx context.Context, cmd *cli.Command) error {
 		return cli.Exit(err.Error(), codes.InternalError)
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		for {
 			select {
 			case event, ok := <-ch:
@@ -116,7 +121,7 @@ func Action(ctx context.Context, cmd *cli.Command) error {
 				return
 			}
 		}
-	}()
+	})
 
 	log.Info(ctx, "Sync command started")
 
@@ -124,6 +129,21 @@ func Action(ctx context.Context, cmd *cli.Command) error {
 
 	log.Info(ctx, "Sync command completed")
 	return nil
+}
+
+// runInitialSync mirrors the whole source tree to the remote once, before the
+// watcher starts. Failures are logged and do not stop the process, consistent
+// with runtime sync failures, so watching still covers future changes.
+func runInitialSync(ctx context.Context, log logger.Logger, s *syncer.Syncer, dryRun bool) {
+	log.Info(ctx, "Initial sync started")
+
+	if dryRun {
+		s.PreviewAll(ctx)
+	} else if syncErr := s.SyncAll(ctx); syncErr != nil {
+		log.Error(ctx, "Initial sync failed", syncErr)
+	}
+
+	log.Info(ctx, "Initial sync completed")
 }
 
 func dryRunLog(ctx context.Context, event watcher.Event) {
