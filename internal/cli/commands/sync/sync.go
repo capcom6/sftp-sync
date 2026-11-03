@@ -34,6 +34,7 @@ func Command() *cli.Command {
 				Name:     "dest",
 				Usage:    "destination FTP/SFTP server URL (e.g., ftp://user:pass@host/path or sftp://user:pass@host:22/path)",
 				Required: true,
+				Sources:  cli.EnvVars("SFTP_SYNC_DEST"),
 			},
 			&cli.StringSliceFlag{
 				Name:  "exclude",

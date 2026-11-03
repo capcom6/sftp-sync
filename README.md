@@ -215,6 +215,8 @@ sftp-sync --initial-sync --dest=sftp://username@hostname:22/path/to/remote/folde
   - SFTP (SSH key with passphrase): `sftp://username@hostname:22/path?key=~/.ssh/id_ed25519&key_pass=<passphrase>`
   - SFTP (SSH agent): `sftp://username@hostname:22/path?agent=true`
 
+The URL can also be provided via the `SFTP_SYNC_DEST` environment variable (including through a `.env` file); a value passed explicitly with `--dest` takes precedence.
+
 The URL path (e.g., `/path/to/remote/folder`) is used as the remote destination prefix. All synced files and directories are placed relative to this path. **The remote directory must already exist** before starting the sync.
 
 SFTP URL query parameters:
@@ -268,19 +270,22 @@ Failures that occur **while syncing** (for example, the remote server is unreach
 
 ### Environment Variables
 
-| Variable        | Purpose                                                                                                             | Format                                                                                                     | Default                       | Example                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------- |
-| `DEBUG`         | Enables debug logging (equivalent to the `--debug` flag).                                                           | Boolean accepted by Go's `strconv.ParseBool`: `1`, `t`, `T`, `true`, `TRUE`, `True`. `0`/`false` disables. | unset (disabled)              | `DEBUG=1`                    |
-| `SSH_AUTH_SOCK` | Path to the SSH agent socket. Read-only — provided by `ssh-agent`; used when the destination URL has `?agent=true`. | Unix socket path                                                                                           | set by the system/`ssh-agent` | `/tmp/ssh-XXXXXX/agent.1234` |
+| Variable         | Purpose                                                                                                             | Format                                                                                                     | Default                                    | Example                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------ |
+| `DEBUG`          | Enables debug logging (equivalent to the `--debug` flag).                                                           | Boolean accepted by Go's `strconv.ParseBool`: `1`, `t`, `T`, `true`, `TRUE`, `True`. `0`/`false` disables. | unset (disabled)                           | `DEBUG=1`                                  |
+| `SSH_AUTH_SOCK`  | Path to the SSH agent socket. Read-only — provided by `ssh-agent`; used when the destination URL has `?agent=true`. | Unix socket path                                                                                           | set by the system/`ssh-agent`              | `/tmp/ssh-XXXXXX/agent.1234`               |
+| `SFTP_SYNC_DEST` | Destination FTP/SFTP server URL (equivalent to the `--dest` flag; the flag takes precedence when both are given).   | FTP or SFTP URL: `ftp://user:pass@host/path`, `sftp://user:pass@host:22/path`                              | unset (required unless `--dest` is passed) | `SFTP_SYNC_DEST=ftp://user:pass@host/path` |
 
 > **Note:** an unparseable `DEBUG` value (e.g. `DEBUG=yes`) makes the command fail at startup with exit code `4`.
+> An empty `SFTP_SYNC_DEST` counts as set, so the command fails with exit code `1` ("destination server is required") instead of `4`.
 
 ### The `.env` File
 
-On startup the application loads environment variables from a `.env` file in the current working directory (via [godotenv](https://github.com/joho/godotenv)); a missing file is ignored. This is a convenient way to set `DEBUG` without typing it on every run:
+On startup the application loads environment variables from a `.env` file in the current working directory (via [godotenv](https://github.com/joho/godotenv)); a missing file is ignored. This is a convenient way to set `DEBUG` or `SFTP_SYNC_DEST` without typing them on every run:
 
 ```dotenv
 DEBUG=1
+SFTP_SYNC_DEST=ftp://username:password@hostname/path/to/remote/folder
 ```
 
 See [.env.example](.env.example) for a documented template.
