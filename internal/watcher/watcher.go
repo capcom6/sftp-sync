@@ -60,11 +60,9 @@ func (w *Watcher) Watch(ctx context.Context, wg *sync.WaitGroup) (EventsChannel,
 
 	w.events = make(chan Event)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		w.runWatcher(ctx)
-	}()
+	})
 
 	return w.events, nil
 }

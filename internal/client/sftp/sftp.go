@@ -131,7 +131,7 @@ func (c *Client) connect(
 	}
 
 	addr := net.JoinHostPort(config.Host, config.Port)
-	dialer := &net.Dialer{Timeout: config.ConnectTimeout} //nolint:exhaustruct // only Timeout is relevant
+	dialer := &net.Dialer{Timeout: config.ConnectTimeout} //nolint:exhaustruct_v5 // only Timeout is relevant
 	netConn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't connect to %s: %w", addr, err)

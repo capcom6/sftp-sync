@@ -59,8 +59,11 @@ func main() {
 		ArgsUsage: "[source]",
 		Arguments: []cli.Argument{
 			&cli.StringArg{
-				Name:      "source",
-				UsageText: "local directory to watch for changes",
+				Name:        "source",
+				UsageText:   "local directory to watch for changes",
+				Value:       "",
+				Destination: nil,
+				Required:    false,
 				Config: cli.StringConfig{
 					TrimSpace: true,
 				},
