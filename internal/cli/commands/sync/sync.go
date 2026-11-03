@@ -19,8 +19,11 @@ func Command() *cli.Command {
 		Usage: "watch a local folder for changes and sync them to a remote FTP or SFTP server.",
 		Arguments: []cli.Argument{
 			&cli.StringArg{
-				Name:      "source",
-				UsageText: "local directory to watch for changes",
+				Name:        "source",
+				UsageText:   "local directory to watch for changes",
+				Value:       "",
+				Destination: nil,
+				Required:    false,
 				Config: cli.StringConfig{
 					TrimSpace: true,
 				},

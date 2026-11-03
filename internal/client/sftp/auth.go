@@ -85,7 +85,7 @@ func (a AuthConfig) BuildAuthMethods() ([]ssh.AuthMethod, error) {
 func (a AuthConfig) buildAgentSigners() ([]ssh.Signer, error) {
 	sock := os.Getenv("SSH_AUTH_SOCK")
 
-	dialer := &net.Dialer{Timeout: agentDialTimeout} //nolint:exhaustruct // only Timeout is relevant for agent socket
+	dialer := &net.Dialer{Timeout: agentDialTimeout} //nolint:exhaustruct_v5 // only Timeout is relevant
 	conn, dialErr := dialer.DialContext(context.Background(), "unix", sock)
 	if dialErr != nil {
 		return nil, fmt.Errorf("failed to connect to SSH agent: %w", dialErr)
